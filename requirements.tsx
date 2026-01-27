@@ -6,3 +6,4 @@ pdfplumber==0.11.9
 pip==25.3
 python-dotenv==1.2.1
 supabase==2.27.2
+xlsxwriter==3.2.9

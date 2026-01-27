@@ -1,5 +1,7 @@
 from io import BytesIO
-from typing import List
+import io
+import os
+from typing import Dict, List, Literal
 import pdfplumber
 from pdfplumber.page import Page
 import pandas as pd
@@ -47,19 +49,52 @@ def _remove_empty_row(df: pd.DataFrame):
         | has_agency | has_operating_unit
         | has_amount | has_purpose
     ]
-    print(df_filtered.values)
+    # print(df_filtered.values)
     return pd.DataFrame(df_filtered)
 
 
-def _join_col_to_list_str(col: List[str]):
-    op_units = []
-    for unit in col:
-        if "\n" not in unit:
-            pass
-    pass
+def _join_col_to_list(col: List[str],
+                      item_type: Literal["str", "int", "float"]):
+    col = list(col)
+    type_casters = {"str": str, "int": int, "float": float}
+    type_caster = type_casters[item_type]
+    values = [col[0]]
+    for entry in col[1:]:
+        if "\n" not in entry:
+            value = entry.replace("\n", "")
+            if value:
+                values.append(value)
+                # print(value)
+        else:
+            values[-1] += entry
+    for i, entry in enumerate(values):
+        if item_type == "int" or item_type == "float":
+            value = entry.replace(",", "")
+        else:
+            value = entry.replace("", "None")
+        values[i] = type_caster(value)
+    return values
 
 
-def parse_nca_bytes(bytes: BytesIO):
+def _indent_str_buff(buff: io.StringIO):
+    string = buff.getvalue()
+    indented_str = '\n'.join('\t' + line for line in string.splitlines())
+    return indented_str
+
+
+def _save_nca_xls(release: Dict | None, df: pd.DataFrame, page_num: int):
+    if release:
+        filename = f"NCA_{release["year"]}_page_{page_num}.xlsx"
+    else:
+        filename = f"NCA_page_{page_num}.xlsx"
+    folder = "releases"
+    os.makedirs(folder, exist_ok=True)
+    pathname = os.path.join(folder, filename)
+    df.to_excel(pathname, sheet_name=filename, engine="xlsxwriter")
+    print(f"[INFO] Saved page {page_num} '{filename}' to {folder}/")
+
+
+def parse_nca_bytes(bytes: BytesIO, release: Dict | None = None):
     with pdfplumber.open(bytes) as pdf:
         records = []
         for page_num, page in enumerate(pdf.pages):
@@ -86,37 +121,23 @@ def parse_nca_bytes(bytes: BytesIO):
             df = _remove_empty_row(df)
             df["nca_number"] = df["nca_number"].replace('', None)
             df["nca_number"] = df["nca_number"].ffill()
-            f = df[df["operating_unit"].str.contains("\n")]
-            print(f.values)
-            # break
-            # df_merged = df.groupby("nca_number", as_index=False).agg({
-            #     "nca_type": "first",
-            #     "released_date": "first",
-            #     "department": lambda col: _join_col_to_str(col),
-            #     "agency": lambda col: _join_col_to_str(col),
-            #     "operating_unit":"",
-            #     "amount": "",
-            #     "purpose": lambda col: _join_col_to_str(col),
-            # })
-            # print(df.values)
-            # print(df["NCA NUMBER"].count())
-            # df_merged = df.groupby("NCA NUMBER", as_index=False).agg({
-            #     'NCA TYPE': "first",
-            #     'RELEASED DATE': "first",
-            #     'DEPARTMENT': lambda x: _join_col_to_str(x),
-            #     'AGENCY': lambda x: _join_col_to_str(x),
-            #     'OPERATING UNIT': lambda x: _join_col_to_str(x),
-            #     'AMOUNT': lambda x: float(_join_col_to_str(x).replace(',', '')),
-            #     'PURPOSE': lambda x: _join_col_to_str(x)
-            # }).reset_index(drop=True)
-            # print("\n-----------------------------------------\n")
-            # print(page_num)
-            # print(df_merged.values)
-            # print(df_merged.info())
-            # print(df_merged.shape)
-            # print(df_merged.describe())
-            # print(df_merged.columns)
-            # print(df_merged.index)
+            df_merged = df.groupby("nca_number", as_index=False).agg({
+                "nca_type": "first",
+                "released_date": "first",
+                "department": lambda col: _join_col_to_str(col),
+                "agency": lambda col: _join_col_to_str(col),
+                "operating_unit": lambda col: _join_col_to_list(col, "str"),
+                "amount": lambda col: _join_col_to_list(col, "float"),
+                "purpose": lambda col: _join_col_to_str(col),
+            })
+            df = pd.DataFrame(df_merged)
+            new_records = df.to_dict(orient="records")
+            records.append(new_records)
+            print(f"[INFO] Parsed {df.shape[0]} rows successfully")
+            buff = io.StringIO()
+            df.info(buf=buff)
+            print(_indent_str_buff(buff))
+            # _save_nca_xls(release, df, page_num)
 
 
 bytes = load_sample_pdf_bytes()

@@ -29,11 +29,6 @@ def _get_vert_lines(page: Page):
     return vert_lines
 
 
-def _join_col_to_str(col: List[str]):
-    filtered = map(lambda x: x if type(x) is str else '', col)
-    return ' '.join(filter(None, filtered)).strip()
-
-
 def _remove_empty_row(df: pd.DataFrame):
     has_nca_number = df["nca_number"] != ''
     has_nca_type = df["nca_type"] != ''
@@ -53,22 +48,39 @@ def _remove_empty_row(df: pd.DataFrame):
     return pd.DataFrame(df_filtered)
 
 
-def _join_col_to_list(col: List[str],
-                      item_type: Literal["str", "int", "float"]):
-    col = list(col)
-    type_casters = {"str": str, "int": int, "float": float}
-    type_caster = type_casters[item_type]
+def _join_col_to_str(col: List[str]):
+    filtered = map(lambda x: x if type(x) is str else '', col)
+    return ' '.join(filter(None, filtered)).strip()
+
+
+def _sep_op_units_to_list(col: List[str]):
+    """
+        step 1: 'Cebu Normal UniversityBicol State College of Applied Sciences and Technology'
+        step 2: ai
+        step 3: 'Cebu Normal University,Bicol State College of Applied Sciences and Technology'
+        step 4: ['Cebu Normal University', 'Bicol State College of Applied Sciences and Technology']
+    """
+    string = ''.join(filter(lambda x: x != '', col))
+    print(string)
+    return string
+
+
+def _sep_amounts_to_list(col: List[str]):
+    """
+        step 1: '23434.00233423.652323423.50234234.44'
+        step 2: ['23434', '00233423', '652323423', '50234234', '44']
+        step 3: [23434.00, 233423.65, 2323423.50, 234234.44]
+    """
+    string = ''.join(
+        filter(lambda x: x != '', col)
+    ).replace(",", "").replace(" ", "")
+    string_lst = string.split(".")
     values = []
-    for val in col:
-        if val:
-            values.append(val)
-    # type casting
-    for i, entry in enumerate(values):
-        if item_type == "int" or item_type == "float":
-            value = entry.replace(",", "")
-        else:
-            value = entry
-        values[i] = type_caster(value)
+    for i, item in enumerate(string_lst[0:-1]):
+        val = item + "." + string_lst[i+1][0:2]
+        values.append(float(val))
+        pass
+    print(values)
     return values
 
 
@@ -125,8 +137,8 @@ def parse_nca_bytes(page_count: Literal["all"] | int,
                 "released_date": "first",
                 "department": lambda col: _join_col_to_str(col),
                 "agency": lambda col: _join_col_to_str(col),
-                "operating_unit": lambda col: _join_col_to_list(col, "str"),
-                "amount": lambda col: _join_col_to_list(col, "float"),
+                "operating_unit": lambda col: _sep_op_units_to_list(col),
+                "amount": lambda col: _sep_amounts_to_list(col),
                 "purpose": lambda col: _join_col_to_str(col),
             })
             df = pd.DataFrame(df_merged)

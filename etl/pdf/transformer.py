@@ -2,6 +2,7 @@ from io import BytesIO
 import io
 import os
 from typing import Dict, List, Literal
+from openai import APIStatusError
 import pdfplumber
 from pdfplumber.page import Page
 import pandas as pd
@@ -9,7 +10,7 @@ import pandas as pd
 from etl.utils.split_op_units_to_list import split_op_units_to_list
 
 
-def load_sample_pdf_bytes():
+def load_sample_bytes():
     with open("./sample_nca.pdf", "rb") as pdf:
         bytes = pdf.read()
     return BytesIO(bytes)
@@ -99,7 +100,7 @@ def parse_nca_bytes(page_count: Literal["all"] | int,
         for page_num, page in enumerate(pdf.pages):
             if page_count != "all" and page_num > page_count:
                 break
-            print(f"[INFO] Parsing table in page {page_num}...")
+            print(f"[INFO] Parsing 'table-{page_num}'...")
             vert_lines = _get_vert_lines(page)
             TABLE_SETTINGS = {
                 "vertical_strategy": "explicit",
@@ -134,20 +135,25 @@ def parse_nca_bytes(page_count: Literal["all"] | int,
             df = pd.DataFrame(df_merged)
             while True:
                 try:
-                    print(f"[INFO] Formatting 'OPERATING UNITS' (Page {page_num})...")
+                    print(f"[INFO] Formatting 'OPERATING UNITS' (table-{page_num})...")
                     df["operating_unit"] = split_op_units_to_list(
                         df[["operating_unit", "amount"]].values.tolist()
                     )
                     print(f"[INFO] Formatted {df["operating_unit"].count()} rows")
                     break
-                except ValueError as e:
-                    print(f"[ERROR] Failed in formatting 'OPERATING UNIT' (Page {page_num})")
+                except Exception as e:
+                    print(f"[ERROR] Failed in formatting 'OPERATING UNIT' (table-{page_num})")
                     print(f"\t{e}")
                     print("[INFO] Retrying...")
+                # except ValueError as e:
+                # except APIStatusError as e:
+                #     print(f"[ERROR] Failed in formatting 'OPERATING UNIT' (table-{page_num})")
+                #     print(f"\t{e}")
+                #     print("[INFO] Retrying...")
             # break
             new_records = df.to_dict(orient="records")
             records.extend(new_records)
-            print(f"[INFO] Parsed {df.shape[0]} rows successfully")
+            print(f"[INFO] Parsed {df.shape[0]} rows of 'table-{page_num}'")
             buff = io.StringIO()
             df.info(buf=buff)
             print(_indent_str_buff(buff))
@@ -156,5 +162,5 @@ def parse_nca_bytes(page_count: Literal["all"] | int,
 
 
 if __name__ == "__main__":
-    bytes = load_sample_pdf_bytes()
+    bytes = load_sample_bytes()
     records = parse_nca_bytes(4, bytes)

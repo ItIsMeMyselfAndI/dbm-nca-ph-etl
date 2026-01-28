@@ -6,6 +6,21 @@ import pdfplumber
 from pdfplumber.page import Page
 import pandas as pd
 
+X_POSITIONS = [
+    19.439992224, 133.439946624,
+    182.159927136, 275.9998896,
+    389.15984433600005, 500.159799936,
+    638.159744736, 737.9997048, 1000.00000
+]
+POSSIBLE_HEADERS = [
+    "nca_number", "nca_type", "approved_date", "released_date", "department",
+    "agency", "operating_unit", "amount", "purpose", "remarks"
+]
+VALID_HEADERS = [
+    "nca_number", "nca_type", "released_date", "department",
+    "agency", "operating_unit", "amount", "purpose",
+]
+
 
 def load_sample_bytes(filename: str):
     with open(filename, "rb") as pdf:
@@ -13,33 +28,46 @@ def load_sample_bytes(filename: str):
     return BytesIO(bytes)
 
 
-def _get_vert_lines(page: Page):
-    table = page.find_table()
-    vert_lines = []
-    if table:
-        lines = table.rows[0].cells
-        if not lines:
-            return
-        for i, line in enumerate(lines):
-            if not line:
-                return
-            vert_lines.append(line[0])
-            if i == len(lines) - 1:
-                vert_lines.append(line[2])
-    return vert_lines
+def _get_x_positions(page: Page):
+    target_phrases = POSSIBLE_HEADERS
+    found_phrases = set()
+    x_positions = []
+    words = page.extract_words()
+    texts = [w["text"] for w in words]
+    for phrase in target_phrases:
+        # print(texts[:10])
+        phrase_words = phrase.lower().split("_")
+        n = len(phrase_words)
+        for i in range(len(texts) - n + 1):
+            curr_phrase = "_".join(texts[i:i+n]).lower()
+            if curr_phrase == phrase:
+                x_positions.append(words[i]["x0"])
+                found_phrases.add(phrase)
+                break
+    if "remarks" not in found_phrases:
+        x_positions.append(1000)
+    # TABLE_SETTINGS = {
+    #     "vertical_strategy": "explicit",
+    #     "explicit_vertical_lines": x_positions,
+    #     "horizontal_strategy": "text",
+    #     "intersection_tolerance": 100,
+    #     "snap_y_tolerance": 3,
+    #     # "join_y_tolerance": 1,
+    # }
+    # im = page.to_image()
+    # im.debug_tablefinder(TABLE_SETTINGS).show()
+    # print(found_phrases)
+    # print(x_positions)
+    return x_positions
 
 
 def _convert_table_to_df(table: List[List[str | None]]):
     print("[*]\tConverting table into DataFrame...")
-    valid_header = [
-        "nca_number", "nca_type", "released_date", "department",
-        "agency", "operating_unit", "amount", "purpose",
-    ]
     table_header = [item.lower().replace(
         " ", "_") if item else "" for item in table[0]]
     try:
         df = pd.DataFrame(table[1:], columns=table_header)
-        df = pd.DataFrame(df[valid_header])
+        df = pd.DataFrame(df[VALID_HEADERS])
         # print(df.columns.values)
         print("[*]\tFinished conversion")
         return df
@@ -107,15 +135,17 @@ def parse_nca_bytes(page_count: Literal["all"] | int,
                     bytes: BytesIO, release: Dict):
     print(f"[INFO] Preparing 'NCA-{release["year"]}' for db operations...")
     records: List[Dict] = []
+    x_positions = X_POSITIONS
     with pdfplumber.open(bytes) as pdf:
         for page_num, page in enumerate(pdf.pages):
+            if page_num == 0:
+                x_positions = _get_x_positions(page)
             if page_count != "all" and page_num > page_count:
                 break
             print(f"[*]\tParsing 'table-{page_num}'...")
-            vert_lines = _get_vert_lines(page)
             TABLE_SETTINGS = {
                 "vertical_strategy": "explicit",
-                "explicit_vertical_lines": vert_lines,
+                "explicit_vertical_lines": x_positions,
                 "horizontal_strategy": "text",
                 "intersection_tolerance": 50,
                 "snap_y_tolerance": 3,
@@ -123,6 +153,7 @@ def parse_nca_bytes(page_count: Literal["all"] | int,
             }
             # im = page.to_image()
             # im.debug_tablefinder(TABLE_SETTINGS).show()
+            # break
             table = page.extract_table(TABLE_SETTINGS)
             if not table:
                 continue

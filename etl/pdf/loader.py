@@ -34,20 +34,27 @@ def _insert_records(release: Dict, records: List[Dict], batch_num: int):
         print("[*]\tRetrying...")
         _insert_records(release, records, batch_num)
     if db_records and len(db_records) == len(records):
-        print(f"[*]\tBatch-({batch_num}) added")
+        print(f"[*]\t{release["filename"]} (batch-{batch_num}) added")
     else:
         db_records = None
         print(
-            f"[!]\tFailed adding batch-({batch_num})")
+            f"[!]\tFailed adding {release["filename"]} (batch-{batch_num})")
         print("[*]\tRetrying...")
         _insert_records(release, records, batch_num)
     # print(db_records)
     return db_records
 
 
+def delete_latest_nca_in_db(db_last_release: Dict):
+    print("[INFO] Deleting 'latest' release and records...")
+    supabase.table("release").delete().eq(
+        "id", db_last_release["id"]).execute()
+    print("[INFO] Finished Deleting 'latest'")
+
+
 def load_nca_to_db(release: Dict, records: List[Dict]):
     db_release = _insert_release(release)
-    print(f"[INFO] Inserting '{release["title"]}' records...")
+    print(f"[INFO] Inserting '{release["filename"]}' records...")
     if db_release:
         _add_release_id_to_records(db_release["id"], records)
         # print(records)
@@ -61,4 +68,4 @@ def load_nca_to_db(release: Dict, records: List[Dict]):
                 db_records.extend(db_batch_records)
             time.sleep(1)
             batch_num += 1
-    print(f"[INFO] Finished  inserting '{release["title"]}' records")
+    print(f"[INFO] Finished  inserting '{release["filename"]}' records")

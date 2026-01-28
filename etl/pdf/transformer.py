@@ -92,22 +92,18 @@ def _convert_table_to_df(table: List[List[str | None]]):
         return None
 
 
-def _remove_empty_top_row(df: pd.DataFrame):
-    df.iloc[0] = df.iloc[0].replace("", np.nan)
-    if df.iloc[0].isna().all():
-        df = pd.DataFrame(df.iloc[1:, :].reset_index(drop=True))
-    return df
-
-
 def _join_col_to_str(col: List[str]):
-    filtered = map(lambda x: x if type(x) is str else '', col)
-    return ' '.join(filter(None, filtered)).strip()
+    joined_str = ""
+    for item in col:
+        if item and item is not np.nan:
+            joined_str += " " + item
+    return joined_str
 
 
 def _sep_op_units_to_list(col: List[str]):
     values = ['']
     for val in col:
-        if val:
+        if val and val is not np.nan:
             values[-1] = (values[-1] + " " + val).strip()
         elif not val and values[-1]:
             values.append('')
@@ -123,9 +119,8 @@ def _sep_amounts_to_list(col: List[str]):
         step 2: ['23434', '00233423', '652323423', '50234234', '44']
         step 3: [23434.00, 233423.65, 2323423.50, 234234.44]
     """
-    string = ''.join(
-        filter(lambda x: x != '', col)
-    ).replace(",", "").replace(" ", "")
+    # print(col)
+    string = _join_col_to_str(col).replace(" ", "").replace(",", "")
     string_lst = string.split(".")
     values = []
     for i, item in enumerate(string_lst[0:-1]):
@@ -185,18 +180,13 @@ def parse_nca_bytes(page_count: Literal["all"] | int,
             df = _convert_table_to_df(table)
             if df is None:
                 continue
-            df = _remove_empty_top_row(df)
+            df = df.replace('', np.nan)
+            df["nca_number"] = df["nca_number"].ffill()
             # print(df[["nca_number", "nca_type", "released_date",
-            #       "department", "amount"]])
-            # df["released_date"] = df["released_date"].replace('', None)
-            # df["released_date"] = df["released_date"].ffill()
-            df["nca_type"] = df["nca_type"].replace('', None)
-            df["nca_type"] = df["nca_type"].ffill()
-            # df["nca_number"] = df["nca_number"].replace('', None)
-            # df["nca_number"] = df["nca_number"].ffill()
+            #       "department", "agency", "amount"]].head(20))
             df_merged = df.groupby("nca_number", as_index=False).agg({
-                "nca_type": "first",
-                "released_date": "first",
+                "nca_type": lambda col: _join_col_to_str(col),
+                "released_date": lambda col: _join_col_to_str(col),
                 "department": lambda col: _join_col_to_str(col),
                 "agency": lambda col: _join_col_to_str(col),
                 "operating_unit": lambda col: _sep_op_units_to_list(col),
@@ -204,11 +194,14 @@ def parse_nca_bytes(page_count: Literal["all"] | int,
                 "purpose": lambda col: _join_col_to_str(col),
             })
             df = pd.DataFrame(df_merged)
+            df = df.dropna(how="all")
+            df["nca_number"] = df["nca_number"].replace(np.nan, "")
             df["table_num"] = page_num
             df = df.sort_values(by=["released_date", "nca_number"],
                                 ascending=False)
             # print(df[["nca_number", "nca_type", "released_date",
-            #       "department", "amount"]])
+            #       "department", "agency", "amount"]].head(20))
+            # print(df.values)
             # break
             new_records = df.to_dict(orient="records")
             records.extend(new_records)
@@ -224,7 +217,7 @@ def parse_nca_bytes(page_count: Literal["all"] | int,
 
 
 if __name__ == "__main__":
-    bytes = load_sample_bytes("./releases/NCA-Releases-FY-2021.pdf")
+    bytes = load_sample_bytes("./releases/UPDATED_NCA.PDF")
     sample_release = {"title": "SAMPLE NCA", "year": "2025",
                       "filename": "sample_nca.pdf", "url": "#"}
     records = parse_nca_bytes("all", bytes, sample_release)

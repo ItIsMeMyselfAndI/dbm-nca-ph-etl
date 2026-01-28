@@ -15,7 +15,10 @@ CREATE TABLE public.nca (
   amount double precision[],
   created_at timestamptz DEFAULT CURRENT_TIMESTAMP,
   updated_at timestamptz DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_nca_release FOREIGN KEY (release_id) REFERENCES "release"(id)
+  CONSTRAINT fk_nca_release
+    FOREIGN KEY (release_id) REFERENCES "release"(id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
 );
 CREATE TABLE public.release (
   id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

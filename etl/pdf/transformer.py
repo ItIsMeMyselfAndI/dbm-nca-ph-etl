@@ -5,6 +5,7 @@ from typing import Dict, List, Literal
 import pdfplumber
 from pdfplumber.page import Page
 import pandas as pd
+import numpy as np
 
 X_POSITIONS = [
     19.439992224, 133.439946624,
@@ -28,7 +29,7 @@ def load_sample_bytes(filename: str):
     return BytesIO(bytes)
 
 
-def _get_x_positions(page: Page):
+def _get_x_positions_using_text(page: Page):
     target_phrases = POSSIBLE_HEADERS
     found_phrases = set()
     x_positions = []
@@ -61,6 +62,20 @@ def _get_x_positions(page: Page):
     return x_positions
 
 
+def _get_x_positions_using_table(page: Page):
+    x_positions = []
+    table = page.find_table()
+    if table:
+        col_positions = table.rows[0].cells
+        for item in col_positions:
+            if not item:
+                return
+            x_positions.extend([item[0], item[2]])
+    x_positions = list(set(x_positions))
+    # print(x_positions)
+    return x_positions
+
+
 def _convert_table_to_df(table: List[List[str | None]]):
     print("[*]\tConverting table into DataFrame...")
     table_header = [item.lower().replace(
@@ -72,8 +87,16 @@ def _convert_table_to_df(table: List[List[str | None]]):
         print("[*]\tFinished conversion")
         return df
     except Exception:
-        print("[!]\tPDF is unreadable (skipped)")
+        print("[!]\tPDF is unreadable")
+        print("\tSkipped table")
         return None
+
+
+def _remove_empty_top_row(df: pd.DataFrame):
+    df.iloc[0] = df.iloc[0].replace("", np.nan)
+    if df.iloc[0].isna().all():
+        df = pd.DataFrame(df.iloc[1:, :].reset_index(drop=True))
+    return df
 
 
 def _join_col_to_str(col: List[str]):
@@ -139,7 +162,9 @@ def parse_nca_bytes(page_count: Literal["all"] | int,
     with pdfplumber.open(bytes) as pdf:
         for page_num, page in enumerate(pdf.pages):
             if page_num == 0:
-                x_positions = _get_x_positions(page)
+                x_positions = _get_x_positions_using_text(page)
+                if len(x_positions) <= 1:
+                    x_positions = _get_x_positions_using_table(page)
             if page_count != "all" and page_num > page_count:
                 break
             print(f"[*]\tParsing 'table-{page_num}'...")
@@ -160,8 +185,15 @@ def parse_nca_bytes(page_count: Literal["all"] | int,
             df = _convert_table_to_df(table)
             if df is None:
                 continue
-            df["released_date"] = df["released_date"].replace('', None)
-            df["released_date"] = df["released_date"].ffill()
+            df = _remove_empty_top_row(df)
+            # print(df[["nca_number", "nca_type", "released_date",
+            #       "department", "amount"]])
+            # df["released_date"] = df["released_date"].replace('', None)
+            # df["released_date"] = df["released_date"].ffill()
+            df["nca_type"] = df["nca_type"].replace('', None)
+            df["nca_type"] = df["nca_type"].ffill()
+            # df["nca_number"] = df["nca_number"].replace('', None)
+            # df["nca_number"] = df["nca_number"].ffill()
             df_merged = df.groupby("nca_number", as_index=False).agg({
                 "nca_type": "first",
                 "released_date": "first",
@@ -173,6 +205,11 @@ def parse_nca_bytes(page_count: Literal["all"] | int,
             })
             df = pd.DataFrame(df_merged)
             df["table_num"] = page_num
+            df = df.sort_values(by=["released_date", "nca_number"],
+                                ascending=False)
+            # print(df[["nca_number", "nca_type", "released_date",
+            #       "department", "amount"]])
+            # break
             new_records = df.to_dict(orient="records")
             records.extend(new_records)
             buff = io.StringIO()
@@ -190,4 +227,4 @@ if __name__ == "__main__":
     bytes = load_sample_bytes("./releases/NCA-Releases-FY-2021.pdf")
     sample_release = {"title": "SAMPLE NCA", "year": "2025",
                       "filename": "sample_nca.pdf", "url": "#"}
-    records = parse_nca_bytes(20, bytes, sample_release)
+    records = parse_nca_bytes("all", bytes, sample_release)

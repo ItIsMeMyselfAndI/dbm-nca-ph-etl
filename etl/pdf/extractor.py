@@ -43,7 +43,7 @@ def get_nca_pdf_releases() -> List[Dict]:
             "title": title,
             "url": url,
             "filename": filename,
-            "year": year
+            "year": int(str(year))
         })
     # logs
     length = len(pdf_releases)

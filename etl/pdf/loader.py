@@ -33,13 +33,12 @@ def _insert_records(release: Dict, records: List[Dict], batch_num: int):
         print(f"\t{e}")
         print("[*]\tRetrying...")
         _insert_records(release, records, batch_num)
-
     if db_records and len(db_records) == len(records):
-        print(f"[*]\tInserted 'NCA-{release["year"]}' (batch-{batch_num})")
+        print(f"[*]\tBatch-({batch_num}) added")
     else:
         db_records = None
         print(
-            f"[!]\tFailed inserting 'NCA-{release["year"]}' (batch-{batch_num})")
+            f"[!]\tFailed adding batch-({batch_num})")
         print("[*]\tRetrying...")
         _insert_records(release, records, batch_num)
     # print(db_records)
@@ -48,7 +47,7 @@ def _insert_records(release: Dict, records: List[Dict], batch_num: int):
 
 def load_nca_to_db(release: Dict, records: List[Dict]):
     db_release = _insert_release(release)
-    print(f"[INFO] Inserting '{release["title"]}' records")
+    print(f"[INFO] Inserting '{release["title"]}' records...")
     if db_release:
         _add_release_id_to_records(db_release["id"], records)
         # print(records)

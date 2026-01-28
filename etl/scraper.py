@@ -4,11 +4,14 @@ from etl.pdf.transformer import load_sample_bytes, parse_nca_bytes
 
 
 def main():
+    print("[INFO] Updating NCA db...")
     releases = get_nca_pdf_releases()
     for release in releases:
-        bytes = download_nca_pdf_bytes(release)
-        records = parse_nca_bytes("all", bytes, release)
-        load_nca_to_db(release, records)
+        if release["year"] >= 2024:
+            bytes = download_nca_pdf_bytes(release)
+            records = parse_nca_bytes("all", bytes, release)
+            load_nca_to_db(release, records)
+    print("[INFO] Updated NCA db successfully")
 
 
 def test():

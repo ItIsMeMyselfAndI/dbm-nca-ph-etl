@@ -2,28 +2,27 @@
 -- Table order and constraints may not be valid for execution.
 
 CREATE TABLE public.nca (
-  id integer NOT NULL DEFAULT nextval('nca_id_seq'::regclass),
-  release_id integer NOT NULL,
+  id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  release_id int NOT NULL,
   nca_number text,
   nca_type text,
   agency text,
   department text,
   released_date date,
   purpose text,
-  operating_unit ARRAY,
-  amount ARRAY,
-  created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-  updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT nca_pkey PRIMARY KEY (id),
-  CONSTRAINT fk_nca_release FOREIGN KEY (release_id) REFERENCES release(id)
+  operating_unit text[],
+  amount double precision[],
+  created_at timestamptz DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamptz DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_nca_release FOREIGN KEY (release_id) REFERENCES "release"(id)
 );
 CREATE TABLE public.release (
-  id integer NOT NULL DEFAULT nextval('release_id_seq'::regclass),
+  id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   title text,
   filename text,
   url text,
-  year integer,
-  created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-  updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+  year int,
+  created_at timestamptz DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamptz DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT release_pkey PRIMARY KEY (id)
 );

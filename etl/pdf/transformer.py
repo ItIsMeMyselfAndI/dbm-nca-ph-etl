@@ -2,12 +2,9 @@ from io import BytesIO
 import io
 import os
 from typing import Dict, List, Literal
-from openai import APIStatusError
 import pdfplumber
 from pdfplumber.page import Page
 import pandas as pd
-
-from etl.utils.split_op_units_to_list import split_op_units_to_list
 
 
 def load_sample_bytes():
@@ -32,28 +29,22 @@ def _get_vert_lines(page: Page):
     return vert_lines
 
 
-def _remove_empty_row(df: pd.DataFrame):
-    has_nca_number = df["nca_number"] != ''
-    has_nca_type = df["nca_type"] != ''
-    has_released_date = df["released_date"] != ''
-    has_department = df["department"] != ''
-    has_agency = df["agency"] != ''
-    has_operating_unit = df["operating_unit"] != ''
-    has_amount = df["amount"] != ''
-    has_purpose = df["purpose"] != ''
-    df_filtered = df[
-        has_nca_number | has_nca_type
-        | has_released_date | has_department
-        | has_agency | has_operating_unit
-        | has_amount | has_purpose
-    ]
-    # print(df_filtered.values)
-    return pd.DataFrame(df_filtered)
-
-
 def _join_col_to_str(col: List[str]):
     filtered = map(lambda x: x if type(x) is str else '', col)
     return ' '.join(filter(None, filtered)).strip()
+
+
+def _sep_op_units_to_list(col: List[str]):
+    values = ['']
+    for val in col:
+        if val:
+            values[-1] = (values[-1] + " " + val).strip()
+        elif not val and values[-1]:
+            values.append('')
+    if not values[-1]:
+        values.pop()
+    # print(values)
+    return values
 
 
 def _sep_amounts_to_list(col: List[str]):
@@ -75,9 +66,9 @@ def _sep_amounts_to_list(col: List[str]):
     return values
 
 
-def _indent_str_buff(buff: io.StringIO):
+def _double_indent_str_buff(buff: io.StringIO):
     string = buff.getvalue()
-    indented_str = '\n'.join('\t' + line for line in string.splitlines())
+    indented_str = '\n'.join('\t\t' + line for line in string.splitlines())
     return indented_str
 
 
@@ -94,13 +85,14 @@ def _save_nca_xls(release: Dict | None, df: pd.DataFrame, page_num: int):
 
 
 def parse_nca_bytes(page_count: Literal["all"] | int,
-                    bytes: BytesIO, release: Dict | None = None):
+                    bytes: BytesIO, release: Dict):
+    print(f"[INFO] Preparing 'NCA-{release["year"]}' for db operations...")
     records: List[Dict] = []
     with pdfplumber.open(bytes) as pdf:
         for page_num, page in enumerate(pdf.pages):
             if page_count != "all" and page_num > page_count:
                 break
-            print(f"[INFO] Parsing 'table-{page_num}'...")
+            print(f"[*]\tParsing 'table-{page_num}'...")
             vert_lines = _get_vert_lines(page)
             TABLE_SETTINGS = {
                 "vertical_strategy": "explicit",
@@ -120,7 +112,6 @@ def parse_nca_bytes(page_count: Literal["all"] | int,
             if not table:
                 continue
             df = pd.DataFrame(table[1:], columns=header)
-            df = _remove_empty_row(df)
             df["nca_number"] = df["nca_number"].replace('', None)
             df["nca_number"] = df["nca_number"].ffill()
             df_merged = df.groupby("nca_number", as_index=False).agg({
@@ -128,39 +119,26 @@ def parse_nca_bytes(page_count: Literal["all"] | int,
                 "released_date": "first",
                 "department": lambda col: _join_col_to_str(col),
                 "agency": lambda col: _join_col_to_str(col),
-                "operating_unit": lambda col: _join_col_to_str(col),
+                "operating_unit": lambda col: _sep_op_units_to_list(col),
                 "amount": lambda col: _sep_amounts_to_list(col),
                 "purpose": lambda col: _join_col_to_str(col),
             })
             df = pd.DataFrame(df_merged)
-            while True:
-                try:
-                    print(f"[INFO] Formatting 'OPERATING UNITS' (table-{page_num})...")
-                    df["operating_unit"] = split_op_units_to_list(
-                        df[["operating_unit", "amount"]].values.tolist()
-                    )
-                    print(f"[INFO] Formatted {df["operating_unit"].count()} rows")
-                    break
-                except Exception as e:
-                    print(f"[ERROR] Failed in formatting 'OPERATING UNIT' (table-{page_num})")
-                    print(f"\t{e}")
-                    print("[INFO] Retrying...")
-                # except ValueError as e:
-                # except APIStatusError as e:
-                #     print(f"[ERROR] Failed in formatting 'OPERATING UNIT' (table-{page_num})")
-                #     print(f"\t{e}")
-                #     print("[INFO] Retrying...")
-            # break
             new_records = df.to_dict(orient="records")
             records.extend(new_records)
-            print(f"[INFO] Parsed {df.shape[0]} rows of 'table-{page_num}'")
             buff = io.StringIO()
             df.info(buf=buff)
-            print(_indent_str_buff(buff))
+            row_count = df.shape[0]
+            print(f"[*]\tParsed {row_count} {
+                  "rows" if row_count > 1 else "row"} of 'table-{page_num}'")
+            print(_double_indent_str_buff(buff))
             # _save_nca_xls(release, df, page_num)
+    print(f"[INFO] Finished preparing 'NCA-{release["year"]}'")
     return records
 
 
 if __name__ == "__main__":
     bytes = load_sample_bytes()
-    records = parse_nca_bytes(4, bytes)
+    sample_release = {"title": "SAMPLE NCA", "year": "2025",
+                      "filename": "sample_nca.pdf", "url": "#"}
+    records = parse_nca_bytes(4, bytes, sample_release)

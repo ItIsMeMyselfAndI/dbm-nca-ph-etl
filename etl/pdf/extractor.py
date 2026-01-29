@@ -1,10 +1,12 @@
-import os
 from typing import Dict, List
 import requests
 from bs4 import BeautifulSoup
 import re
 from io import BytesIO
 from datetime import datetime
+
+from etl.utils.nca_bytes_2_pdf import nca_bytes_2_pdf
+
 
 BASE_URL = "https://www.dbm.gov.ph"
 NCA_PAGE = "https://www.dbm.gov.ph/index.php/notice-of-cash-allocation-nca-listing"
@@ -73,18 +75,8 @@ def download_nca_pdf_bytes(release: Dict) -> BytesIO:
     return BytesIO(res.content)
 
 
-# test
-def save_nca_pdf(release: Dict, bytes: BytesIO):
-    folder = "releases"
-    filename = release["filename"]
-    os.makedirs(folder, exist_ok=True)
-    with open(os.path.join(folder, filename), "wb") as f:
-        f.write(bytes.getvalue())
-        print(f"[INFO] Saved '{filename}' to {folder}/")
-
-
 if __name__ == "__main__":
     pdf_releases = get_nca_pdf_releases()
     for release in pdf_releases:
         bytes = download_nca_pdf_bytes(release)
-        # save_nca_pdf(release, bytes)
+        # nca_bytes_2_pdf(release, bytes)

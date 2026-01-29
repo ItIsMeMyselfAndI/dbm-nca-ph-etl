@@ -1,11 +1,13 @@
-from io import BytesIO
-import io
-import os
+from io import StringIO, BytesIO
 from typing import Dict, List, Literal
 import pdfplumber
 from pdfplumber.page import Page
 import pandas as pd
 import numpy as np
+
+from etl.utils.indent_buff_str import indent_buff_str
+from etl.utils.nca_bytes_2_pdf import nca_bytes_2_pdf
+from etl.utils.parse_nca_pdf_2_bytes import parse_nca_pdf_2_bytes
 
 X_POSITIONS = [
     19.439992224, 133.439946624,
@@ -21,12 +23,6 @@ VALID_HEADERS = [
     "nca_number", "nca_type", "released_date", "department",
     "agency", "operating_unit", "amount", "purpose",
 ]
-
-
-def load_sample_bytes(filename: str):
-    with open(filename, "rb") as pdf:
-        bytes = pdf.read()
-    return BytesIO(bytes)
 
 
 def _get_x_positions_using_text(page: Page):
@@ -131,26 +127,8 @@ def _sep_amounts_to_list(col: List[str]):
     return values
 
 
-def _double_indent_str_buff(buff: io.StringIO):
-    string = buff.getvalue()
-    indented_str = '\n'.join('\t\t' + line for line in string.splitlines())
-    return indented_str
-
-
-def _save_nca_xls(release: Dict | None, df: pd.DataFrame, page_num: int):
-    if release:
-        filename = f"NCA_{release["year"]}_page_{page_num}.xlsx"
-    else:
-        filename = f"NCA_page_{page_num}.xlsx"
-    folder = "releases"
-    os.makedirs(folder, exist_ok=True)
-    pathname = os.path.join(folder, filename)
-    df.to_excel(pathname, sheet_name=filename, engine="xlsxwriter")
-    print(f"[INFO] Saved page {page_num} '{filename}' to {folder}/")
-
-
-def parse_nca_bytes(page_count: Literal["all"] | int,
-                    bytes: BytesIO, release: Dict):
+def parse_nca_bytes_2_records(page_count: Literal["all"] | int,
+                              bytes: BytesIO, release: Dict):
     print(f"[INFO] Preparing 'NCA-{release["year"]}' for db operations...")
     records: List[Dict] = []
     x_positions = X_POSITIONS
@@ -205,19 +183,19 @@ def parse_nca_bytes(page_count: Literal["all"] | int,
             # break
             new_records = df.to_dict(orient="records")
             records.extend(new_records)
-            buff = io.StringIO()
+            buff = StringIO()
             df.info(buf=buff)
             row_count = df.shape[0]
             print(f"[*]\tParsed {row_count} {
                   "rows" if row_count > 1 else "row"} of 'table-{page_num}'")
-            print(_double_indent_str_buff(buff))
-            # _save_nca_xls(release, df, page_num)
+            print(indent_buff_str(buff, 2))
+            # nca_df_2_xlsx(release, df, page_num)
     print(f"[INFO] Finished preparing 'NCA-{release["year"]}'")
     return records
 
 
 if __name__ == "__main__":
-    bytes = load_sample_bytes("./releases/UPDATED_NCA.PDF")
+    bytes = parse_nca_pdf_2_bytes("./releases/UPDATED_NCA.PDF")
     sample_release = {"title": "SAMPLE NCA", "year": "2025",
                       "filename": "sample_nca.pdf", "url": "#"}
-    records = parse_nca_bytes("all", bytes, sample_release)
+    records = parse_nca_bytes_2_records("all", bytes, sample_release)

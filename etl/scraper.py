@@ -36,11 +36,9 @@ def get_db_last_record():
 def process_data(page_count: Literal["all"] | int,
                  release: Dict):
     print("")
-    last_record = get_db_last_record()
     bytes = download_nca_pdf_bytes(release)
     nca_bytes_2_pdf(release, bytes)
-    data = parse_nca_bytes_2_db_data(page_count, bytes,
-                                     release, last_record)
+    data = parse_nca_bytes_2_db_data(page_count, bytes, release)
     load_nca_to_db(release, data["records"], data["allocations"])
 
 
@@ -92,14 +90,13 @@ def test(table_count: Literal["all"] | int):
     bytes = parse_nca_pdf_2_bytes("./releases/NCA_2024.pdf")
     sample_release = {"title": "SAMPLE NCA", "year": "2025",
                       "filename": "sample_nca.pdf", "url": "#"}
-    data = parse_nca_bytes_2_db_data(table_count, bytes,
-                                     sample_release, None)
+    data = parse_nca_bytes_2_db_data(table_count, bytes, sample_release)
     load_nca_to_db(sample_release, data["records"], data["allocations"])
 
 
 if __name__ == "__main__":
     prev_time = time.time()
-    # test()
+    # test(10)
     # main(10)
     main("all")
     curr_time = time.time()

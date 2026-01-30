@@ -23,6 +23,13 @@ VALID_HEADERS = [
     "nca_number", "nca_type", "released_date", "department",
     "agency", "operating_unit", "amount", "purpose",
 ]
+RECORD_HEADERS = [
+    "nca_number", "nca_type", "released_date",
+    "department", "purpose", "table_num",  # "release_id" added during load
+]
+ALLOCATION_HEADERS = [
+    "nca_number", "agency", "operating_unit", "amount"
+]
 
 
 def _get_x_positions_using_text(page: Page):
@@ -134,41 +141,38 @@ def _clean_df(df: pd.DataFrame, table_num: int):
     df = pd.DataFrame(df_merged)
     df["table_num"] = table_num
     df = df.dropna(how="all").dropna(subset="nca_number")
-    # break
     df = df.replace(np.nan, "")
     print("[*]\tCleaned DataFrame successfully")
     return df
 
 
-def _get_records_df(df: pd.DataFrame, table_num: int):
+def _clean_table_records_df(df: pd.DataFrame, table_num: int):
     # print("[*]\tFormatting records dataframe...")
     df["table_num"] = table_num
     df_records = pd.DataFrame(
-        df[["id", "nca_number", "nca_type", "released_date",
-            "department", "purpose", "table_num"]]
+        df[RECORD_HEADERS]
     ).drop_duplicates(subset="nca_number")
     # print("[*]\tFormatted records dataframe successfully")
     return df_records
 
 
-def _get_allocations_df(df: pd.DataFrame):
+def _clean_table_allocations_df(df: pd.DataFrame):
     """
         for row in df:
             if row all Nan: push row to allocations
             else: concatenate row items to allocations[-1] items
     """
     # print("[*]\tFormatting allocations dataframe...")
-    header = ["agency",
+    header = ["nca_number", "agency",
               "operating_unit", "amount"]
     new_df = pd.DataFrame(df[header])
-    new_df["record_id"] = df["id"]
-    new_df = new_df.explode(header, ignore_index=True)
+    new_df = new_df.explode(header[1:], ignore_index=True)
     new_df = new_df.fillna("")
     # print("new_df")
     # print(new_df.tail(50))
     df_allocations = [new_df.iloc[0]]
     for _, row in new_df.iloc[1:].iterrows():
-        if (row[header] == "").all():
+        if (row[header[1:]] == "").all():
             df_allocations.append(row)
         else:
             last_idx = len(df_allocations) - 1
@@ -177,8 +181,9 @@ def _get_allocations_df(df: pd.DataFrame):
                 row["operating_unit"]
             df_allocations[last_idx]["amount"] += " " + row["amount"]
     df_allocations = pd.DataFrame(df_allocations).replace("", np.nan)
-    df_allocations = pd.DataFrame(
-        df_allocations.dropna(subset=header, how="all"))
+    df_allocations = pd.DataFrame(df_allocations.dropna(
+        subset=header[1:], how="all")
+    )
     df_allocations[header] = df_allocations[header].fillna(
         "").map(lambda x: x.strip())
     df_allocations["amount"] = pd.to_numeric(
@@ -190,14 +195,24 @@ def _get_allocations_df(df: pd.DataFrame):
     return df_allocations
 
 
+def _transform_dfs_to_db_data(all_df_records: pd.DataFrame,
+                              all_df_allocations: pd.DataFrame):
+    all_df_records = all_df_records.drop_duplicates(
+        subset="nca_number", keep="first")
+    records = all_df_records.to_dict(orient="records")
+    allocations = all_df_allocations.to_dict(orient="records")
+    data = {"records": records, "allocations": allocations}
+    return data
+
+
 def parse_nca_bytes_2_db_data(page_count: Literal["all"] | int,
-                              bytes: BytesIO, release: Dict,
-                              last_record: Dict | None):
+                              bytes: BytesIO, release: Dict):
     print(f"[INFO] Preparing 'NCA-{release["year"]}' data...")
-    records: List[Dict] = []
-    allocations: List[Dict] = []
+    df_all_records = pd.DataFrame(columns=RECORD_HEADERS)
+    df_all_allocations = pd.DataFrame(columns=ALLOCATION_HEADERS)
+    # records: List[Dict] = []
+    # allocations: List[Dict] = []
     x_positions = X_POSITIONS
-    last_record_id = last_record["id"] + 1 if last_record else 0
     with pdfplumber.open(bytes) as pdf:
         for page_num, page in enumerate(pdf.pages):
             if page_num == 0:
@@ -219,35 +234,40 @@ def parse_nca_bytes_2_db_data(page_count: Literal["all"] | int,
             if df is None:
                 continue
             df = _clean_df(df, page_num)
-            df["id"] = range(last_record_id,
-                             last_record_id + df.shape[0])
-            last_record_id += df.shape[0]
-            df_records = _get_records_df(df, page_num)
+            # df["id"] = range(last_record_id,
+            #                  last_record_id + df.shape[0])
+            # last_record_id += df.shape[0]
+            df_records = _clean_table_records_df(df, page_num)
             if df_records.shape[0] < 1:
-                print("[*]\tExtracted 0 rows")
+                # logs
+                print("[*]\tFound no records/allocations")
                 print(f"[*]\t> Parsed NCA-{release["year"]
                                            } (table-{page_num}) successfully")
                 continue
-            df_allocations = _get_allocations_df(df)
-            # print(df_records["nca_number"])
-            # print(df_allocations["nca_number"])
-            # print(df.values)
-            # break
-            new_records = df_records.to_dict(orient="records")
-            new_allocations = df_allocations.to_dict(orient="records")
-            records.extend(new_records)
-            allocations.extend(new_allocations)
+            df_allocations = _clean_table_allocations_df(df)
+            df_all_records = pd.concat(
+                [df_all_records, df_records], ignore_index=True)
+            df_all_allocations = pd.concat(
+                [df_all_allocations, df_allocations], ignore_index=True)
+            # new_records = df_records.to_dict(orient="records")
+            # new_allocations = df_allocations.to_dict(orient="records")
+            # records.extend(new_records)
+            # allocations.extend(new_allocations)
             buff = StringIO()
             df.info(buf=buff)
-            row_count = df.shape[0]
+            record_count = df_records.shape[0]
+            allocation_count = df_allocations.shape[0]
+            # logs
             print(
-                f"[*]\tExtracted {row_count} {"rows" if row_count > 1 else "row"}")
+                f"[*]\tFound {record_count} {"records" if record_count > 1 else "record"}")
+            print(
+                f"[*]\tFound {allocation_count} {"allocations" if allocation_count > 1 else "allocation"}")
             # print(indent_buff_str(buff, 2))
             # nca_df_2_xlsx(release, df, page_num)
             print(f"[*]\t> Parsed NCA-{release["year"]
                                        } (table-{page_num}) successfully")
+    data = _transform_dfs_to_db_data(df_all_records, df_all_allocations)
     print(f"[INFO] Prepared 'NCA-{release["year"]}' data successfully")
-    data = {"records": records, "allocations": allocations}
     return data
 
 
@@ -255,6 +275,6 @@ if __name__ == "__main__":
     bytes = parse_nca_pdf_2_bytes("./releases/NCA-2016.pdf")
     sample_release = {"title": "SAMPLE NCA", "year": "2025",
                       "filename": "sample_nca.pdf", "url": "#"}
-    data = parse_nca_bytes_2_db_data(50, bytes, sample_release, None)
+    data = parse_nca_bytes_2_db_data(50, bytes, sample_release)
     # print(data["records"])
     # print(data["allocations"])

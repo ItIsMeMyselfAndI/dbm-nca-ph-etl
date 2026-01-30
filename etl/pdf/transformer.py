@@ -65,11 +65,31 @@ def _get_x_positions_using_table(page: Page):
         col_positions = table.rows[0].cells
         for item in col_positions:
             if not item:
-                return
+                continue
             x_positions.extend([item[0], item[2]])
     x_positions = list(set(x_positions))
     # print(x_positions)
     return x_positions
+
+
+def _extract_pdf_table(page: Page, x_positions: List, table_num: int):
+    print(f"[*]\tExtracting pdf 'table-{table_num}'...")
+    TABLE_SETTINGS = {
+        "vertical_strategy": "explicit",
+        "horizontal_strategy": "text",
+        "explicit_vertical_lines": x_positions,
+        "intersection_tolerance": 50,
+        "snap_y_tolerance": 3,
+        # "join_y_tolerance": 1,
+    }
+    # ---- test
+    # im = page.to_image()
+    # im.debug_tablefinder(TABLE_SETTINGS).show()
+    # break
+    # ----
+    table = page.extract_table(TABLE_SETTINGS)
+    print("[*]\tExtracted pdf table successfully")
+    return table
 
 
 def _convert_table_to_df(table: List[List[str | None]]):
@@ -96,14 +116,38 @@ def _join_col_to_str(col: List[str]):
     return joined_str
 
 
+def _clean_df(df: pd.DataFrame, table_num: int):
+    print("[*]\tCleaning DataFrame...")
+    df["nca_number"] = df["nca_number"].replace('', np.nan)
+    df["nca_number"] = df["nca_number"].ffill()
+    # print(df[["nca_number", "nca_type", "released_date",
+    #       "department", "agency", "amount"]].head(20))
+    df_merged = df.groupby("nca_number", as_index=False).agg({
+        "nca_type": lambda col: _join_col_to_str(col),
+        "released_date": lambda col: _join_col_to_str(col),
+        "department": lambda col: _join_col_to_str(col),
+        "agency": lambda col: col,
+        "operating_unit": lambda col: col,
+        "amount": lambda col: col,
+        "purpose": lambda col: _join_col_to_str(col),
+    })
+    df = pd.DataFrame(df_merged)
+    df["table_num"] = table_num
+    df = df.dropna(how="all").dropna(subset="nca_number")
+    # break
+    df = df.replace(np.nan, "")
+    print("[*]\tCleaned DataFrame successfully")
+    return df
+
+
 def _get_records_df(df: pd.DataFrame, table_num: int):
-    print("[*]\tFormatting records dataframe...")
+    # print("[*]\tFormatting records dataframe...")
     df["table_num"] = table_num
     df_records = pd.DataFrame(
         df[["id", "nca_number", "nca_type", "released_date",
             "department", "purpose", "table_num"]]
     ).drop_duplicates(subset="nca_number")
-    print("[*]\tFormatted records dataframe successfully")
+    # print("[*]\tFormatted records dataframe successfully")
     return df_records
 
 
@@ -113,7 +157,7 @@ def _get_allocations_df(df: pd.DataFrame):
             if row all Nan: push row to allocations
             else: concatenate row items to allocations[-1] items
     """
-    print("[*]\tFormatting allocations dataframe...")
+    # print("[*]\tFormatting allocations dataframe...")
     header = ["agency",
               "operating_unit", "amount"]
     new_df = pd.DataFrame(df[header])
@@ -135,80 +179,55 @@ def _get_allocations_df(df: pd.DataFrame):
     df_allocations = pd.DataFrame(df_allocations).replace("", np.nan)
     df_allocations = pd.DataFrame(
         df_allocations.dropna(subset=header, how="all"))
-    df_allocations[header] = df_allocations[header].fillna("").map(lambda x: x.strip())
+    df_allocations[header] = df_allocations[header].fillna(
+        "").map(lambda x: x.strip())
     df_allocations["amount"] = pd.to_numeric(
         df_allocations["amount"].str.replace(",", ""), errors="coerce")
     df_allocations = df_allocations.dropna(subset=["amount"])
     # print("alloc")
     # print(allocations.tail(50))
-    print("[*]\tFormatted allocations dataframe successfully")
+    # print("[*]\tFormatted allocations dataframe successfully")
     return df_allocations
 
 
-def parse_nca_bytes_2_records(page_count: Literal["all"] | int,
+def parse_nca_bytes_2_db_data(page_count: Literal["all"] | int,
                               bytes: BytesIO, release: Dict,
-                              db_last_record: Dict | None):
-    print(f"[INFO] Preparing 'NCA-{release["year"]}' for db operations...")
+                              last_record: Dict | None):
+    print(f"[INFO] Preparing 'NCA-{release["year"]}' data...")
     records: List[Dict] = []
     allocations: List[Dict] = []
     x_positions = X_POSITIONS
-    last_record_id = db_last_record["id"] if db_last_record else 0
+    last_record_id = last_record["id"] + 1 if last_record else 0
     with pdfplumber.open(bytes) as pdf:
         for page_num, page in enumerate(pdf.pages):
             if page_num == 0:
                 x_positions = _get_x_positions_using_text(page)
                 if len(x_positions) <= 1:
                     x_positions = _get_x_positions_using_table(page)
+            print(f"[*]\t> Parsing NCA-{release["year"]
+                                        } (table-{page_num}) data...")
             # ---- test
             # if page_num != 48:
             #     continue
             # ----
             if page_count != "all" and page_num > page_count:
                 break
-            print(f"[*]\tParsing 'table-{page_num}'...")
-            TABLE_SETTINGS = {
-                "vertical_strategy": "explicit",
-                "horizontal_strategy": "text",
-                "explicit_vertical_lines": x_positions,
-                "intersection_tolerance": 50,
-                "snap_y_tolerance": 3,
-                # "join_y_tolerance": 1,
-            }
-            # ---- test
-            # im = page.to_image()
-            # im.debug_tablefinder(TABLE_SETTINGS).show()
-            # break
-            # ----
-            table = page.extract_table(TABLE_SETTINGS)
+            table = _extract_pdf_table(page, x_positions, page_num)
             if not table:
                 continue
             df = _convert_table_to_df(table)
             if df is None:
                 continue
-            # print(df[["operating_unit", "amount"]])
-            df["nca_number"] = df["nca_number"].replace('', np.nan)
-            df["nca_number"] = df["nca_number"].ffill()
-            # print(df[["nca_number", "nca_type", "released_date",
-            #       "department", "agency", "amount"]].head(20))
-            df_merged = df.groupby("nca_number", as_index=False).agg({
-                "nca_type": lambda col: _join_col_to_str(col),
-                "released_date": lambda col: _join_col_to_str(col),
-                "department": lambda col: _join_col_to_str(col),
-                "agency": lambda col: col,
-                "operating_unit": lambda col: col,
-                "amount": lambda col: col,
-                "purpose": lambda col: _join_col_to_str(col),
-            })
-            df = pd.DataFrame(df_merged)
-            df["table_num"] = page_num
-            df = df.dropna(how="all").dropna(subset="nca_number")
-            # break
-            df = df.replace(np.nan, "")
-            # df = df.sort_values(by=["released_date", "nca_number"],
-            #                     ascending=False)
-            df["id"] = range(last_record_id, last_record_id + df.shape[0])
+            df = _clean_df(df, page_num)
+            df["id"] = range(last_record_id,
+                             last_record_id + df.shape[0])
             last_record_id += df.shape[0]
             df_records = _get_records_df(df, page_num)
+            if df_records.shape[0] < 1:
+                print("[*]\tExtracted 0 rows")
+                print(f"[*]\t> Parsed NCA-{release["year"]
+                                           } (table-{page_num}) successfully")
+                continue
             df_allocations = _get_allocations_df(df)
             # print(df_records["nca_number"])
             # print(df_allocations["nca_number"])
@@ -221,11 +240,13 @@ def parse_nca_bytes_2_records(page_count: Literal["all"] | int,
             buff = StringIO()
             df.info(buf=buff)
             row_count = df.shape[0]
-            print(f"[*]\tParsed {row_count} {
-                "rows" if row_count > 1 else "row"} of 'table-{page_num}'")
+            print(
+                f"[*]\tExtracted {row_count} {"rows" if row_count > 1 else "row"}")
             # print(indent_buff_str(buff, 2))
             # nca_df_2_xlsx(release, df, page_num)
-            print(f"[INFO] Prepared 'NCA-{release["year"]}' successfully")
+            print(f"[*]\t> Parsed NCA-{release["year"]
+                                       } (table-{page_num}) successfully")
+    print(f"[INFO] Prepared 'NCA-{release["year"]}' data successfully")
     data = {"records": records, "allocations": allocations}
     return data
 
@@ -234,6 +255,6 @@ if __name__ == "__main__":
     bytes = parse_nca_pdf_2_bytes("./releases/NCA-2016.pdf")
     sample_release = {"title": "SAMPLE NCA", "year": "2025",
                       "filename": "sample_nca.pdf", "url": "#"}
-    data = parse_nca_bytes_2_records(50, bytes, sample_release, None)
+    data = parse_nca_bytes_2_db_data(50, bytes, sample_release, None)
     # print(data["records"])
     # print(data["allocations"])

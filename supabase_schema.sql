@@ -34,3 +34,11 @@ CREATE TABLE public.allocation (
   record_id int NOT NULL REFERENCES public."record"(id) ON DELETE CASCADE
 );
 
+-- indeces
+CREATE INDEX IF NOT EXISTS idx_release_id ON public.release(id);
+CREATE INDEX IF NOT EXISTS idx_record_id ON public.record(id);
+CREATE INDEX IF NOT EXISTS idx_allocation_id ON public.allocation(id);
+CREATE INDEX IF NOT EXISTS idx_record_release_id 
+ON public.record(release_id);
+CREATE INDEX IF NOT EXISTS idx_allocation_record_id 
+ON public.allocation(record_id);

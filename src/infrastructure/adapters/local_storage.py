@@ -1,11 +1,16 @@
 import os
 from io import BytesIO
 
+from src.core.interfaces.storage import StorageProvider
 
-class LocalStorage:
-    def __init__(self, base_raw_path: str, base_releases_path: str):
-        self.abs_raw_path = os.path.abspath(base_raw_path)
-        self.abs_releases_path = os.path.abspath(base_releases_path)
+
+class LocalStorage(StorageProvider):
+    def __init__(self, base_storage_path: str):
+        self.abs_storage_path = os.path.abspath(base_storage_path)
+        self._create_base_dirs()
+
+    def get_base_storage_path(self):
+        return self.abs_storage_path
 
     def save_file(self, storage_path: str, data: BytesIO) -> None:
         self._create_base_dirs()
@@ -21,10 +26,5 @@ class LocalStorage:
         with open(full_path, 'rb') as f:
             return BytesIO(f.read())
 
-    def exists(self, storage_path: str) -> bool:
-        full_path = os.path.abspath(storage_path)
-        return os.path.exists(full_path)
-
     def _create_base_dirs(self):
-        os.makedirs(self.abs_raw_path, exist_ok=True)
-        os.makedirs(self.abs_releases_path, exist_ok=True)
+        os.makedirs(self.abs_storage_path, exist_ok=True)

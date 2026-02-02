@@ -15,15 +15,11 @@ class ScrapeReleases:
                  scraper: ScraperProvider,
                  storage: StorageProvider,
                  parser: ParserProvider,
-                 repository: RepositoryProvider,
-                 base_raw_path: str,
-                 base_releases_path: str):
+                 repository: RepositoryProvider):
         self.scraper = scraper
         self.storage = storage
         self.parser = parser
         self.repository = repository
-        self.base_raw_path = base_raw_path
-        self.base_releases_path = base_releases_path
 
     def run(self, oldest_release_year: int = 2024) -> List[Release]:
         logger.info(f"Scraping for releases since {oldest_release_year}...")
@@ -37,7 +33,8 @@ class ScrapeReleases:
 
         success_count = 0
         for release in releases:
-            storage_path = f"{self.base_raw_path}/{release.filename}"
+            storage_path = (f"{self.storage.get_base_storage_path()}/"
+                            f"{release.filename}")
             try:
                 self._save_release(storage_path, release)
                 success_count += 1
@@ -78,7 +75,8 @@ class ScrapeReleases:
         filtered_releases = []
         for release in releases:
             db_release = self.repository.get_release(release.id)
-            storage_path = f"{self.base_raw_path}/{release.filename}"
+            storage_path = (f"{self.storage.get_base_storage_path()}/"
+                            f"{release.filename}")
             file_release_metadata = self.parser.get_metadata(storage_path)
 
             release.file_meta_created_at = file_release_metadata.created_at
@@ -91,8 +89,11 @@ class ScrapeReleases:
                 continue
 
             has_changed = (
-                db_release.file_meta_created_at != file_release_metadata.created_at or
-                db_release.file_meta_modified_at != file_release_metadata.modified_at
+                db_release.file_meta_created_at !=
+                file_release_metadata.created_at
+                or
+                db_release.file_meta_modified_at !=
+                file_release_metadata.modified_at
             )
 
             if has_changed:

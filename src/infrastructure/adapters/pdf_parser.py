@@ -5,10 +5,11 @@ import pdfplumber
 from pdfplumber.page import Page
 
 from src.core.entities.metadata import MetaData
+from src.core.interfaces.parser import ParserProvider
 from src.infrastructure.constants import TABLE_COLUMNS
 
 
-class PDFParser:
+class PDFParser(ParserProvider):
     def __init__(self):
         self.table_settings = {
             "vertical_strategy": "explicit",

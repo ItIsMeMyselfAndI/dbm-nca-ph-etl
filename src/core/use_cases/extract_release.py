@@ -12,22 +12,21 @@ from src.core.interfaces.storage import StorageProvider
 logger = logging.getLogger(__name__)
 
 
-class ExtractRawData:
+class ExtractRelease:
     def __init__(self,
                  storage: StorageProvider,
                  parser: ParserProvider,
-                 batch_size: int,
-                 base_data_path: str):
+                 batch_size: int,):
         self.storage = storage
         self.parser = parser
         self.batch_size = batch_size
-        self.base_data_path = base_data_path
 
     def run(self, release: Release) -> List[NCARawTable]:
 
         try:
             logger.info(f"Extracting raw data from {release.filename}...")
-            storage_path = f"{self.base_data_path}/{release.filename}"
+            storage_path = (f"{self.storage.get_base_storage_path()}/"
+                            f"{release.filename}")
             raw_data = self.storage.load_file(storage_path)
             page_data_list = self.parser.split_pages(raw_data)
             pages = self._extract_tables(release, page_data_list)

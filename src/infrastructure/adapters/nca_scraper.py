@@ -8,9 +8,10 @@ import requests
 
 from core.entities.release import Release
 from infrastructure.constants import BASE_URL, NCA_PAGE
+from src.core.interfaces.scraper import ScraperProvider
 
 
-class NCAScraper:
+class NCAScraper(ScraperProvider):
     def __init__(self):
         pass
 

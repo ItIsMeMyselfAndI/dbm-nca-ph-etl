@@ -5,9 +5,10 @@ import numpy as np
 from src.core.entities.allocation import Allocation
 from src.core.entities.nca_data import NCAData
 from src.core.entities.record import Record
+from src.core.interfaces.data_cleaner import DataCleanerProvider
 
 
-class PdDataCleaner:
+class PdDataCleaner(DataCleanerProvider):
     def __init__(self,
                  allocation_comumns: List[str],
                  record_columns: List[str],

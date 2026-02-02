@@ -4,9 +4,7 @@ NCA_PAGE = "https://www.dbm.gov.ph/index.php/notice-of-cash-allocation-nca-listi
 WEBSITE_NAME = "PH-DBM"
 
 # local storage
-BASE_DATA_STORAGE_PATH = "data"
-BASE_RAW_STORAGE_PATH = "data/raw"
-BASE_RELEASES_STORAGE_PATH = "data/releases"
+BASE_STORAGE_PATH = "releases/"
 
 # table
 VERT_LINES = [

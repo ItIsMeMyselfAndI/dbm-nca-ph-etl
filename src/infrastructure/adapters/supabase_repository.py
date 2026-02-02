@@ -5,10 +5,11 @@ from supabase import create_client
 from src.core.entities.allocation import Allocation
 from src.core.entities.record import Record
 from src.core.entities.release import Release
+from src.core.interfaces.repository import RepositoryProvider
 from src.infrastructure.config import settings
 
 
-class SupabseRepository:
+class SupabaseRepository(RepositoryProvider):
     def __init__(self, db_bulk_size: int):
         self.client = create_client(
             settings.SUPABASE_URL,

@@ -1,9 +1,9 @@
-from src.core.use_cases.extract_raw_data import ExtractRawData
+from src.core.use_cases.extract_release import ExtractRelease
 from src.core.use_cases.load_release import LoadRelease
 from src.core.use_cases.scrape_releases import ScrapeReleases
-from src.core.use_cases.send_queue_message import SendQueueMessage
+from src.core.use_cases.queue_data import QeueuData
 from src.infrastructure.adapters.sqs_queue import SQSQueue
-from src.infrastructure.adapters.supabase_repository import SupabseRepository
+from src.infrastructure.adapters.supabase_repository import SupabaseRepository
 from src.infrastructure.adapters.local_storage import LocalStorage
 from src.infrastructure.adapters.nca_scraper import NCAScraper
 import logging
@@ -12,9 +12,7 @@ import sys
 from src.infrastructure.adapters.pd_data_cleaner import PdDataCleaner
 from src.infrastructure.adapters.pdf_parser import PDFParser
 from src.infrastructure.constants import (ALLOCATION_COLUMNS,
-                                          BASE_DATA_STORAGE_PATH,
-                                          BASE_RAW_STORAGE_PATH,
-                                          BASE_RELEASES_STORAGE_PATH,
+                                          BASE_STORAGE_PATH,
                                           DB_BULK_SIZE,
                                           RECORD_COLUMNS,
                                           VALID_COLUMNS)
@@ -32,34 +30,25 @@ def main():
     # init adapters
     logger.debug("Setting up adapters...")
     scraper = NCAScraper()
-    storage = LocalStorage(base_raw_path=BASE_RAW_STORAGE_PATH,
-                           base_releases_path=BASE_RELEASES_STORAGE_PATH)
+    storage = LocalStorage(base_storage_path=BASE_STORAGE_PATH)
     parser = PDFParser()
-    queue = SQSQueue(queue_url="")
+    queue = SQSQueue()
     data_cleaner = PdDataCleaner(allocation_comumns=ALLOCATION_COLUMNS,
                                  record_columns=RECORD_COLUMNS,
                                  valid_columns=VALID_COLUMNS)
-    repository = SupabseRepository(db_bulk_size=DB_BULK_SIZE)
+    repository = SupabaseRepository(db_bulk_size=DB_BULK_SIZE)
 
     # init use cases
     scrape_job = ScrapeReleases(scraper=scraper,
                                 storage=storage,
                                 parser=parser,
-                                repository=repository,
-                                base_raw_path=BASE_DATA_STORAGE_PATH,
-                                base_releases_path=BASE_RELEASES_STORAGE_PATH
-                                )
-    extract_job = ExtractRawData(
-        storage=storage,
-        parser=parser,
-        batch_size=DB_BULK_SIZE,
-        base_data_path=BASE_DATA_STORAGE_PATH,
-    )
-    queue_job = SendQueueMessage(queue=queue)
-    load_job = LoadRelease(
-        data_cleaner=data_cleaner,
-        repository=repository,
-    )
+                                repository=repository,)
+    extract_job = ExtractRelease(storage=storage,
+                                 parser=parser,
+                                 batch_size=DB_BULK_SIZE,)
+    queue_job = QeueuData(queue=queue)
+    load_job = LoadRelease(data_cleaner=data_cleaner,
+                           repository=repository,)
 
     # excute
     try:
@@ -74,6 +63,9 @@ def main():
             for table in table_batches:
                 queue_job.run(table)
                 load_job.run(table)
+                # <test>
+                break
+                # </test>
             logger.info(f"Loaded {release.filename}.")
         logger.info("Job completed successfully.")
 

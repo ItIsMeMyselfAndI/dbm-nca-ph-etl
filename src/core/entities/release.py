@@ -8,5 +8,6 @@ class Release(BaseModel):
     url: str
     filename: str
     year: int
+    page_count: int = 0
     file_meta_created_at: Optional[str] = None
     file_meta_modified_at: Optional[str] = None

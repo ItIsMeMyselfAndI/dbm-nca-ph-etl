@@ -1,6 +1,7 @@
 from copy import Error
+from io import BytesIO
 import logging
-from typing import List
+from typing import List, Tuple
 from core.interfaces.scraper import ScraperProvider
 from core.interfaces.storage import StorageProvider
 from src.core.entities.release import Release
@@ -24,46 +25,59 @@ class ScrapeReleases:
     def run(self, oldest_release_year: int = 2024) -> List[Release]:
         logger.info(f"Scraping for releases since {oldest_release_year}...")
 
+        # scrape
         try:
             releases = self.scraper.get_releases(oldest_release_year)
             logger.info(f"Found {len(releases)} releases")
         except Exception as e:
-            logger.critical(f"Failed to fetch release list: {e}")
+            logger.critical(f"Failed to scrape release list: {e}")
             raise e
 
-        success_count = 0
-        for release in releases:
-            storage_path = (f"{self.storage.get_base_storage_path()}/"
-                            f"{release.filename}")
-            try:
-                self._save_release(storage_path, release)
-                success_count += 1
-            except Exception as e:
-                logger.error(f"Failed to ingest {storage_path}: {e}")
-
-        logger.info(f"Successfully synced {
-                    success_count}/{len(releases)} files.")
-
+        # filter
         logger.info("Filtering new/modified releases...")
-        filtered_releases = self._filter_new_or_updated_releases(releases)
+        filtered_releases, filtered_data = \
+            self._filter_new_or_updated_releases(releases)
         logger.info(
             f"Filtered only new/updated releases: "
             f"{len(filtered_releases)}/{len(releases)} remained")
+
+        # save
+        success_count = 0
+        for i in range(len(filtered_releases)):
+            storage_path = (f"{self.storage.get_base_storage_path()}/"
+                            f"{filtered_releases[i].filename}")
+            try:
+                page_count = self._save_release(filtered_releases[i],
+                                                filtered_data[i])
+                filtered_releases[i].page_count = page_count
+                success_count += 1
+
+            except Exception as e:
+                logger.error(f"Failed to sync {storage_path}: {e}")
+
+        logger.info(f"Successfully synced {
+                    success_count}/{len(releases)} files.")
 
         # <test ----------->
         # return releases
         # </test ----------->
         return filtered_releases
 
-    def _save_release(self, storage_path: str, release: Release):
-        data = self.scraper.download_release(release)
+    def _save_release(self, release: Release, data: BytesIO) -> int:
+        storage_path = (f"{self.storage.get_base_storage_path()}/"
+                        f"{release.filename}")
         if data.getbuffer().nbytes == 0:
             raise Error("Downloaded file is empty.")
 
         self.storage.save_file(storage_path, data)
         logger.info(f"Synced: {storage_path}")
+        page_count = self.parser.get_page_count(data)
+        return page_count
 
-    def _filter_new_or_updated_releases(self, releases: List[Release]):
+    def _filter_new_or_updated_releases(self,
+                                        releases: List[Release]
+                                        ) -> Tuple[List[Release],
+                                                   List[BytesIO]]:
         """
             if db release empty
                 include all releases
@@ -73,20 +87,21 @@ class ScrapeReleases:
                         include release
         """
         filtered_releases = []
+        filtered_data = []
         for release in releases:
             db_release = self.repository.get_release(release.id)
-            storage_path = (f"{self.storage.get_base_storage_path()}/"
-                            f"{release.filename}")
-            file_release_metadata = self.parser.get_metadata(storage_path)
-
-            release.file_meta_created_at = file_release_metadata.created_at
-            release.file_meta_modified_at = file_release_metadata.modified_at
+            data = self.scraper.download_release(release)
+            file_release_metadata = self.parser.get_metadata_by_data(data)
 
             if not db_release:
                 filtered_releases.append(release)
+                filtered_data.append(data)
                 continue
             if not file_release_metadata:
                 continue
+
+            release.file_meta_created_at = file_release_metadata.created_at
+            release.file_meta_modified_at = file_release_metadata.modified_at
 
             has_changed = (
                 db_release.file_meta_created_at !=
@@ -101,7 +116,8 @@ class ScrapeReleases:
                 logger.info(f"Update detected for {
                             release.filename}. Re-processing...")
                 filtered_releases.append(release)
+                filtered_data.append(data)
             else:
                 logger.debug(f"No changes for {release.filename}. Skipping.")
 
-        return filtered_releases
+        return filtered_releases, filtered_data

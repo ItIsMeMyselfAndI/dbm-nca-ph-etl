@@ -1,7 +1,7 @@
 import json
 import boto3
 import logging
-from src.core.entities.nca_raw_table import NCARawTable
+from src.core.entities.page_raw_table import PageRawTable
 from src.core.interfaces.queue import QueueProvider
 from src.infrastructure.config import settings
 
@@ -18,7 +18,7 @@ class SQSQueue(QueueProvider):
         )
         self.queue_url = settings.SQS_QUEUE_URL
 
-    def send_data(self, data: NCARawTable) -> None:
+    def send_data(self, data: PageRawTable) -> None:
         # try:
         #     message_body = json.dumps(data.model_dump(mode='json'))
         #
@@ -32,4 +32,4 @@ class SQSQueue(QueueProvider):
         # except Exception as e:
         #     logger.error(f"Failed to send batch to SQS: {e}")
         #     raise e
-        print(data)
+        print({"message": data.release})

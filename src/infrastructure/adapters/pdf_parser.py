@@ -21,8 +21,8 @@ class PDFParser(ParserProvider):
         }
         pass
 
-    def get_metadata(self, storage_path: str) -> MetaData:
-        reader = PdfReader(storage_path)
+    def get_metadata_by_data(self, data: BytesIO) -> MetaData:
+        reader = PdfReader(data)
         meta = reader.metadata
         metadata = MetaData(**{
             "created_at": meta.get('/CreationDate'),  # pyright: ignore
@@ -30,10 +30,9 @@ class PDFParser(ParserProvider):
         })
         return metadata
 
-    def display_page(self, page: Page):
-        print(self.table_settings["explicit_vertical_lines"])
-        im = page.to_image()
-        im.debug_tablefinder(self.table_settings).show()
+    def get_page_count(self, data: BytesIO) -> int:
+        reader = PdfReader(data)
+        return len(reader.pages)
 
     def split_pages(self, data: BytesIO) -> List[BytesIO]:
         data_list: List[BytesIO] = []
@@ -49,14 +48,18 @@ class PDFParser(ParserProvider):
 
         return data_list
 
-    def extract_tables(self, data: BytesIO,
-                       ) -> List[List[str | None]]:
+    def extract_table_by_page_num(self, data: BytesIO,
+                                  page_num: int
+                                  ) -> List[List[str | None]]:
         raw_rows: List[List[str | None]] = []
 
         with pdfplumber.open(data) as pdf:
             for i, page in enumerate(pdf.pages):
                 if i == 0:
                     self._update_table_settings_vert_lines(page)
+
+                if i != page_num:
+                    continue
 
                 rows = page.extract_table(self.table_settings)
                 if rows:
@@ -66,6 +69,11 @@ class PDFParser(ParserProvider):
                 # </test ----------->
 
         return raw_rows
+
+    def display_page(self, page: Page):
+        print(self.table_settings["explicit_vertical_lines"])
+        im = page.to_image()
+        im.debug_tablefinder(self.table_settings).show()
 
     def _update_table_settings_vert_lines(self, page: Page):
         target_phrases = TABLE_COLUMNS

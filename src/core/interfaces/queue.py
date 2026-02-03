@@ -1,9 +1,9 @@
 from typing import Protocol
 
-from src.core.entities.nca_raw_table import NCARawTable
+from src.core.entities.page_raw_table import PageRawTable
 
 
 class QueueProvider(Protocol):
-    def send_data(self, data: NCARawTable) -> None:
+    def send_data(self, data: PageRawTable) -> None:
         """sends a batch of extracted rows to the queue"""
         ...

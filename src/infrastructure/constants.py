@@ -6,6 +6,8 @@ WEBSITE_NAME = "PH-DBM"
 # local storage
 BASE_STORAGE_PATH = "releases/"
 
+BATCH_PAGE_COUNT = 5
+
 # table
 VERT_LINES = [
     19.439992224, 133.439946624,

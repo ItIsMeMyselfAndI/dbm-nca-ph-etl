@@ -5,6 +5,7 @@ CREATE TABLE public.release (
   filename text,
   url text,
   year int,
+  page_count int,
   file_meta_created_at text,
   file_meta_modified_at text,
   created_at timestamptz DEFAULT CURRENT_TIMESTAMP,

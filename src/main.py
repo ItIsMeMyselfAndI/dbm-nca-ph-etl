@@ -1,4 +1,6 @@
-from src.core.use_cases.extract_release import ExtractRelease
+from datetime import timedelta
+import time
+from src.core.use_cases.extract_page_table import ExtractPageTable
 from src.core.use_cases.load_release import LoadRelease
 from src.core.use_cases.scrape_releases import ScrapeReleases
 from src.core.use_cases.queue_data import QeueuData
@@ -8,6 +10,7 @@ from src.infrastructure.adapters.local_storage import LocalStorage
 from src.infrastructure.adapters.nca_scraper import NCAScraper
 import logging
 import sys
+from tqdm import tqdm
 
 from src.infrastructure.adapters.pd_data_cleaner import PdDataCleaner
 from src.infrastructure.adapters.pdf_parser import PDFParser
@@ -43,9 +46,8 @@ def main():
                                 storage=storage,
                                 parser=parser,
                                 repository=repository,)
-    extract_job = ExtractRelease(storage=storage,
-                                 parser=parser,
-                                 batch_size=DB_BULK_SIZE,)
+    extract_job = ExtractPageTable(storage=storage,
+                                   parser=parser)
     queue_job = QeueuData(queue=queue)
     load_job = LoadRelease(data_cleaner=data_cleaner,
                            repository=repository,)
@@ -58,15 +60,33 @@ def main():
 
         logger.info("Starting Processing Job...")
         for release in releases:
-            table_batches = extract_job.run(release)
-            logger.info(f"Loading {release.filename} data to db...")
-            for table in table_batches:
+            logger.info(f"Extracting & Loading "
+                        f"{release.filename} raw data to db...")
+
+            prev_time = time.time()
+            for page_num in tqdm(range(release.page_count),
+                                 desc="Extracting/Loading", unit="file"):
+
+                table = extract_job.run(release, page_num)
+
+                if not table:
+                    logger.warning(f"Skipped extracting {release.filename} "
+                                   f"page-{page_num}: Table Not Found")
+                    continue
+
                 queue_job.run(table)
                 load_job.run(table)
                 # <test>
-                break
+                # break
                 # </test>
-            logger.info(f"Loaded {release.filename}.")
+
+            elapsed = str(timedelta(seconds=time.time() -
+                                    prev_time)).split(":")
+            logger.info(f"Loaded complete in "
+                        f"{elapsed[0]}h "
+                        f"{elapsed[1]}m "
+                        f"{elapsed[2]}s: "
+                        f"{release.filename}")
         logger.info("Job completed successfully.")
 
     except Exception as e:

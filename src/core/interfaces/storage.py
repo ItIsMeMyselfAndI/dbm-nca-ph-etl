@@ -4,14 +4,14 @@ from io import BytesIO
 
 class StorageProvider(Protocol):
 
-    def get_base_storage_path(self) -> str:
-        """return the base storage path as string"""
+    def get_filename_full_path(self, filename: str) -> str:
+        """return the full storage path of a file"""
         ...
 
-    def save_file(self, storage_path: str, data: BytesIO):
+    def save_file(self, filename: str, data: BytesIO):
         """saves data to the destination (s3, disk, etc)"""
         ...
 
-    def load_file(self, storage_path: str) -> BytesIO:
+    def load_file(self, filename: str) -> BytesIO:
         """load data into memory"""
         ...

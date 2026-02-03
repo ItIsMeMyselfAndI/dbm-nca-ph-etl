@@ -48,8 +48,6 @@ class ScrapeReleases:
         # save
         success_count = 0
         for i in range(len(filtered_releases)):
-            storage_path = (f"{self.storage.get_base_storage_path()}/"
-                            f"{filtered_releases[i].filename}")
             try:
                 page_count = self._save_release(filtered_releases[i],
                                                 filtered_data[i])
@@ -62,7 +60,8 @@ class ScrapeReleases:
                 success_count += 1
 
             except Exception as e:
-                logger.error(f"Failed to sync {storage_path}: {e}")
+                logger.error(f"Failed to sync "
+                             f"{filtered_releases[i].filename}: {e}")
 
         logger.info(f"Successfully synced {
                     success_count}/{len(releases)} files.")
@@ -73,13 +72,11 @@ class ScrapeReleases:
         return filtered_releases
 
     def _save_release(self, release: Release, data: BytesIO) -> int:
-        storage_path = (f"{self.storage.get_base_storage_path()}/"
-                        f"{release.filename}")
         if data.getbuffer().nbytes == 0:
             raise Error("Downloaded file is empty.")
 
-        self.storage.save_file(storage_path, data)
-        logger.info(f"Synced: {storage_path}")
+        self.storage.save_file(release.filename, data)
+        logger.info(f"Synced: {release.filename}")
         page_count = self.parser.get_page_count(data)
         return page_count
 
@@ -107,6 +104,9 @@ class ScrapeReleases:
                 filtered_data.append(data)
                 continue
             if not file_release_metadata:
+                self.storage.save_file(release.filename, data)
+                filtered_releases.append(release)
+                filtered_data.append(data)
                 continue
 
             release.file_meta_created_at = file_release_metadata.created_at

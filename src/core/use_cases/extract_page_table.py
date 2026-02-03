@@ -12,23 +12,23 @@ class ExtractPageTable:
         self.storage = storage
         self.parser = parser
 
-    def run(self, storage_path: str, page_num: int) -> RawPageTable | None:
+    def run(self, filename: str, page_num: int) -> RawPageTable | None:
 
         try:
-            page_table = self._extract_tables(storage_path, page_num)
+            page_table = self._extract_tables(filename, page_num)
             return page_table
 
         except Exception as e:
-            logger.error(f"Failed to extract {storage_path} "
+            logger.error(f"Failed to extract {filename} "
                          f"page-{page_num}: {e}")
             return None
 
-    def _extract_tables(self, storage_path: str,
+    def _extract_tables(self, filename: str,
                         page_num: int) -> RawPageTable | None:
-        logger.debug(f"Extracting raw data from {storage_path}: "
+        logger.debug(f"Extracting raw data from {filename}: "
                      f"page-{page_num}...")
 
-        raw_data = self.storage.load_file(storage_path)
+        raw_data = self.storage.load_file(filename)
 
         rows = self.parser.extract_table_by_page_num(raw_data, page_num)
         raw_table = RawPageTable(

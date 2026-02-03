@@ -21,9 +21,7 @@ class QueueReleasePages:
         self.queue = queue
         self.repository = repository
 
-    def run(self, release: Release) -> str | None:
-        storage_path = (f"{self.storage.get_base_storage_path()}/"
-                        f"{release.filename}")
+    def run(self, release: Release):
         for i in range(release.page_count):
             try:
                 message_body = QueueReleasePageBody(
@@ -42,8 +40,6 @@ class QueueReleasePages:
             if i == 1:
                 break
             # </test>
-
-        return storage_path
 
     def _get_page_count(self, filename: str) -> int:
         data = self.storage.load_file(filename)

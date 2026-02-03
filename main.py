@@ -70,18 +70,13 @@ def main():
                         f"{release.filename} raw data to db...")
 
             # queue release pages
-            storage_path = queue_release_job.run(release)
-
-            if not storage_path:
-                logger.warning(f"Skipped processing {release.filename}: "
-                               f"Failed to queue release pages")
-                continue
+            queue_release_job.run(release)
 
             # process
             prev_time = time.time()
             for page_num in tqdm(range(release.page_count),
                                  desc="Extracting/Loading", unit="file"):
-                table = extract_job.run(storage_path, page_num)
+                table = extract_job.run(release.filename, page_num)
                 if not table:
                     logger.warning(f"Skipped extracting {release.filename} "
                                    f"page-{page_num}: Table Not Found")

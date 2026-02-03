@@ -6,10 +6,25 @@ import os
 def setup_logging():
     is_lambda = os.environ.get("AWS_LAMBDA_FUNCTION_NAME") is not None
 
-    handlers_list = ["console"]
+    handlers_definitions = {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "standard",
+            "stream": sys.stdout,
+        }
+    }
 
+    active_handlers = ["console"]
+
+    # add file handler only if not in lambda
     if not is_lambda:
-        handlers_list.append("file")
+        handlers_definitions["file"] = {
+            "class": "logging.FileHandler",
+            "formatter": "standard",
+            "filename": "pipeline.log",
+            "mode": "a",
+        }
+        active_handlers.append("file")
 
     LOG_CONFIG = {
         "version": 1,
@@ -20,22 +35,10 @@ def setup_logging():
                 "datefmt": "%Y-%m-%d %H:%M:%S",
             },
         },
-        "handlers": {
-            "console": {
-                "class": "logging.StreamHandler",
-                "formatter": "standard",
-                "stream": sys.stdout,
-            },
-            "file": {
-                "class": "logging.FileHandler",
-                "formatter": "standard",
-                "filename": "pipeline.log",
-                "mode": "a",
-            },
-        },
+        "handlers": handlers_definitions,
         "loggers": {
-            "": {  # root logger
-                "handlers": handlers_list,
+            "": {
+                "handlers": active_handlers,
                 "level": "INFO",
                 "propagate": True,
             },
@@ -51,4 +54,5 @@ def setup_logging():
             },
         },
     }
+
     logging.config.dictConfig(LOG_CONFIG)

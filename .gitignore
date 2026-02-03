@@ -7,6 +7,6 @@ releases/
 data/
 raw/
 
-*.log*
+pipeline.log
 
 dist/

@@ -6,11 +6,14 @@ class Settings(BaseSettings):
     SUPABASE_URL: str
     SUPABASE_ANON_KEY: str
 
-    AWS_PROFILE: Optional[str] = None
+    # AWS_PROFILE: Optional[str] = None
     AWS_REGION: Optional[str] = "ap-southeast-1"
 
-    AWS_SQS_QUEUE_URL: str
     AWS_S3_BUCKET_NAME: str
+
+    AWS_SQS_RELEASE_QUEUE_URL: str
+    AWS_SQS_RELEASE_PAGE_QUEUE_URL: str
+
     AWS_LAMBDA_FUNCTION_NAME: str
 
     # AWS_ACCESS_KEY_ID: Optional[str] = None

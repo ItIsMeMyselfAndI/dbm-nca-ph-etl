@@ -1,5 +1,6 @@
 import logging
-from src.core.entities.page_raw_table import PageRawTable
+from src.core.entities.raw_page_table import RawPageTable
+from src.core.entities.release import Release
 from src.core.interfaces.data_cleaner import DataCleanerProvider
 from src.core.interfaces.repository import RepositoryProvider
 
@@ -13,20 +14,20 @@ class LoadRelease:
         self.data_cleaner = data_cleaner
         self.repository = repository
 
-    def run(self, page_table: PageRawTable):
+    def run(self, release: Release, raw_table: RawPageTable):
         try:
-            logger.debug(f"Loading {page_table.release.filename} data to db: "
-                         f"page-{page_table.page_num}...")
-            self.repository.upsert_release(page_table.release)
+            logger.debug(f"Loading {release.filename} data to db: "
+                         f"page-{raw_table.page_num}...")
+            self.repository.upsert_release(release)
 
-            page_data = self.data_cleaner.clean_raw_data(page_table.rows,
-                                                         page_table.release.id)
+            raw_data = self.data_cleaner.clean_raw_data(raw_table.rows,
+                                                        release.id)
 
-            self.repository.bulk_upsert_records(page_data.records)
-            self.repository.bulk_insert_allocations(page_data.allocations)
-            logger.debug(f"Loaded {page_table.release.filename} data to db: "
-                         f"page-{page_table.page_num}")
+            self.repository.bulk_upsert_records(raw_data.records)
+            self.repository.bulk_insert_allocations(raw_data.allocations)
+            logger.debug(f"Loaded {release.filename} data to db: "
+                         f"page-{raw_table.page_num}")
 
         except Exception as e:
-            logger.warning(f"Skipped loading {page_table.release.filename} "
-                           f"(page-{page_table.page_num}): {e}")
+            logger.warning(f"Skipped loading {release.filename} "
+                           f"(page-{raw_table.page_num}): {e}")

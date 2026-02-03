@@ -3,6 +3,7 @@ from io import BytesIO
 import logging
 from typing import List, Tuple
 
+from src.core.interfaces.queue import QueueProvider
 from src.core.interfaces.scraper import ScraperProvider
 from src.core.interfaces.storage import StorageProvider
 from src.core.entities.release import Release
@@ -17,10 +18,12 @@ class ScrapeReleases:
                  scraper: ScraperProvider,
                  storage: StorageProvider,
                  parser: ParserProvider,
+                 queue: QueueProvider,
                  repository: RepositoryProvider):
         self.scraper = scraper
         self.storage = storage
         self.parser = parser
+        self.queue = queue
         self.repository = repository
 
     def run(self, oldest_release_year: int = 2024) -> List[Release]:
@@ -51,6 +54,11 @@ class ScrapeReleases:
                 page_count = self._save_release(filtered_releases[i],
                                                 filtered_data[i])
                 filtered_releases[i].page_count = page_count
+
+                self.queue.send_data(filtered_releases[i])
+                logger.info(f"Queued release file for processing: "
+                            f"{filtered_releases[i].filename}")
+
                 success_count += 1
 
             except Exception as e:

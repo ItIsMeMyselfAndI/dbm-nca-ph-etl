@@ -14,7 +14,7 @@ class LocalStorage(StorageProvider):
 
     def save_file(self, storage_path: str, data: BytesIO) -> None:
         self._create_base_dirs()
-        full_path = os.path.abspath(storage_path)
+        full_path = f"{self.abs_storage_path}/{storage_path}"
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
 
         data.seek(0)
@@ -22,7 +22,7 @@ class LocalStorage(StorageProvider):
             f.write(data.read())
 
     def load_file(self, storage_path: str) -> BytesIO:
-        full_path = os.path.abspath(storage_path)
+        full_path = f"{self.abs_storage_path}/{storage_path}"
         with open(full_path, 'rb') as f:
             return BytesIO(f.read())
 

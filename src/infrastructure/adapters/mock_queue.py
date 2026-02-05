@@ -1,7 +1,7 @@
 import logging
 
-from src.core.entities.queue_release_page_body import QueueReleasePageBody
 from src.core.entities.release import Release
+from src.core.entities.release_page_queue_body import ReleasePageQueueBody
 from src.core.interfaces.queue import QueueProvider
 
 
@@ -12,5 +12,5 @@ class MockQueue(QueueProvider):
     def __init__(self):
         pass
 
-    def send_data(self, data: Release | QueueReleasePageBody) -> None:
+    def send_data(self, data: Release | ReleasePageQueueBody) -> None:
         print({"message": data})

@@ -21,24 +21,18 @@ class QueueReleasePage:
         self.queue = queue
         self.repository = repository
 
-    def run(self, release: Release):
-        for i in range(release.page_count):
-            try:
-                message_body = ReleasePageQueueBody(
-                    release=release,
-                    page_num=i,
-                )
-                self.queue.send_data(message_body)
-                logger.debug(f"Queued page {i} for release "
-                             f"{release.filename}")
+    def run(self, release: Release, page_num: int):
+        try:
+            message_body = ReleasePageQueueBody(
+                release=release,
+                page_num=page_num,
+            )
+            self.queue.send_data(message_body)
+            logger.debug(f"Queued page {page_num} for "
+                         f"release {release.filename}")
 
-            except Exception as e:
-                logger.error(f"Failed to queue page {i} for "
-                             f"release {release.filename}: {e}",
-                             exc_info=True)
-                continue
-
-            # <test>
-            if i == 5:
-                break
-            # </test>
+        except Exception as e:
+            logger.error(f"Failed to queue page {page_num} "
+                         f"for release {release.filename}: {e}",
+                         exc_info=True)
+            return

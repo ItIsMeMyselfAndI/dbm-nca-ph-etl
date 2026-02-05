@@ -3,12 +3,12 @@ import logging
 import sys
 from tqdm import tqdm
 from datetime import timedelta
+from src.core.use_cases.queue_release_page import QueueReleasePage
 from src.infrastructure.adapters.s3_storage import S3Storage
 from src.logging_config import setup_logging
 
 from src.core.use_cases.extract_page_table import ExtractPageTable
 from src.core.use_cases.load_release import LoadRelease
-from src.core.use_cases.queue_release_pages import QueueReleasePages
 from src.core.use_cases.scrape_releases import ScrapeReleases
 from src.infrastructure.adapters.mock_queue import MockQueue
 from src.infrastructure.adapters.supabase_repository import SupabaseRepository
@@ -43,10 +43,10 @@ scrape_job = ScrapeReleases(scraper=scraper,
                             parser=parser,
                             queue=queue,
                             repository=repository,)
-queue_release_job = QueueReleasePages(storage=storage,
-                                      parser=parser,
-                                      queue=queue,
-                                      repository=repository)
+queue_release_job = QueueReleasePage(storage=storage,
+                                     parser=parser,
+                                     queue=queue,
+                                     repository=repository)
 extract_job = ExtractPageTable(storage=storage,
                                parser=parser)
 load_job = LoadRelease(data_cleaner=data_cleaner,
@@ -69,21 +69,25 @@ def main():
             logger.info(f"Extracting & Loading "
                         f"{release.filename} raw data to db...")
 
-            # queue release pages
-            queue_release_job.run(release)
-
-            # process
             prev_time = time.time()
             for page_num in tqdm(range(release.page_count),
                                  desc="Extracting/Loading", unit="file"):
+                # queue release page
+                queue_release_job.run(release, page_num)
+
+                # clean release page data
                 table = extract_job.run(release.filename, page_num)
                 if not table:
                     logger.warning(f"Skipped extracting {release.filename} "
                                    f"page-{page_num}: Table Not Found")
                     continue
+
+                # load data
                 load_job.run(release, table)
+
                 # <test>
-                break
+                if page_num > 5:
+                    break
                 # </test>
 
             elapsed = str(timedelta(seconds=time.time() -

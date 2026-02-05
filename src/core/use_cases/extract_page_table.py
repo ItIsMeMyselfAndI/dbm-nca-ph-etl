@@ -29,6 +29,8 @@ class ExtractPageTable:
                      f"page-{page_num}...")
 
         raw_data = self.storage.load_file(filename)
+        if not raw_data:
+            return None
 
         rows = self.parser.extract_table_by_page_num(raw_data, page_num)
         raw_table = RawPageTable(

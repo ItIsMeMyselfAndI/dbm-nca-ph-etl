@@ -103,10 +103,18 @@ class ScrapeReleases:
             file_release_metadata = self.parser.get_metadata_by_data(data)
             data.seek(0)
 
-            if not db_release or not storage_release:
+            if not db_release:
                 filtered_releases.append(release)
                 filtered_data.append(data)
-                logger.info(f"Release not found. "
+                logger.info(f"Release not found in DB. "
+                            f"Added to filtered releases: "
+                            f"{release.filename}")
+                continue
+
+            if not storage_release:
+                filtered_releases.append(release)
+                filtered_data.append(data)
+                logger.info(f"Release not found in Storage. "
                             f"Added to filtered releases: "
                             f"{release.filename}")
                 continue

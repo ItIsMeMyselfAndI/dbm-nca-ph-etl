@@ -33,6 +33,11 @@ class ExtractPageTable:
             return None
 
         rows = self.parser.extract_table_by_page_num(raw_data, page_num)
+        if len(rows) == 0:
+            logger.warning(f"No table found in {filename} "
+                           f"page-{page_num}")
+            return None
+
         table = RawPageTable(
             rows=rows,
             page_num=page_num

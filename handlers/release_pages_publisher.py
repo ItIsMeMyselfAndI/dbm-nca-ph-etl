@@ -7,7 +7,7 @@ import logging
 import json
 
 # <test>
-MAX_PAGE_COUNT_TO_PUBISH = 5
+MAX_PAGE_COUNT_TO_PUBLISH = None
 # </test>
 
 
@@ -23,9 +23,7 @@ queue_job = QueueReleasePage(queue=queue)
 
 def lambda_handler(event, context):
     try:
-        releases = []
-        success_count = 0
-        total_releases = len(event['Records'])
+        queued_releases = []
 
         for record in event['Records']:
             try:
@@ -35,18 +33,33 @@ def lambda_handler(event, context):
 
                 release = Release(**payload)
 
-                for i in range(release.page_count):
-                    queue_job.run(release, i)
+                queued_pages_count = 0
+                total_pages_count = 0
 
-                    # <test>
-                    if i == MAX_PAGE_COUNT_TO_PUBISH and not None:
-                        break
-                    # </test>
+                # <test>
+                if MAX_PAGE_COUNT_TO_PUBLISH is not None:
+                    page_count = min(release.page_count, MAX_PAGE_COUNT_TO_PUBLISH)
+                else:
+                    page_count = release.page_count
+                # </test>
 
-                releases.append(release.filename)
-                success_count += 1
+                for i in range(page_count):
+                    try:
+                        queue_job.run(release, i)
+                        queued_pages_count += 1
+                        total_pages_count += 1
+
+                    except Exception as e:
+                        logger.error(f"Failed to queue page {i} for "
+                                     f"release {release.filename}: {e}",
+                                     exc_info=True)
+                        total_pages_count += 1
+                        continue
+
+                queued_releases.append(release.filename)
                 logger.info(f"Successfully queued pages for "
-                            f"release: {release.filename}")
+                            f"release {release.id}: "
+                            f"{queued_pages_count}/{total_pages_count}")
 
             except Exception as e:
                 logger.error(f"Failed to process record: {e}", exc_info=True)
@@ -60,8 +73,6 @@ def lambda_handler(event, context):
 
     return {
         'statusCode': 200,
-        'body': {
-            "filterd_releases_count": success_count,
-            "total_releases_count": total_releases,
-        }
+        'body': ("Release pages queuing job completed successfully. "
+                f"Queued releases: {queued_releases}")
     }

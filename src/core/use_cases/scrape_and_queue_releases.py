@@ -38,10 +38,10 @@ class ScrapeAndQueueReleases:
             raise e
 
         # filter
-        logger.info("Filtering new/modified releases...")
+        logger.info("Filtering only new/modified releases...")
         filtered_releases, filtered_data = \
             self._filter_new_or_updated_releases(releases)
-        logger.info(f"Filtered only new/updated releases: "
+        logger.info(f"Filtered new/updated releases: "
                     f"{len(filtered_releases)}/{len(releases)} remained")
 
         # save

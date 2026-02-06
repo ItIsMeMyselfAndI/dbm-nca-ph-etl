@@ -46,8 +46,6 @@ class SupabaseRepository(RepositoryProvider):
         self._bulk_check_data(records)
         data = [record.model_dump() for record in records]
         self._bulk_upsert("record", data, "nca_number")
-        self.client.table("record").upsert(data,
-                                           on_conflict="nca_number").execute()
 
     def bulk_insert_allocations(self, allocations: List[Allocation]) -> None:
         self._bulk_check_data(allocations)

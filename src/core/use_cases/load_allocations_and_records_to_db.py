@@ -16,10 +16,22 @@ class LoadRecordsAndAllocationsToDB:
 
     def run(self, release: Release, nca_data: NCAData, page_num: int):
         try:
+            if len(nca_data.records) == 0:
+                logger.warning(f"No records to load "
+                               f"for {release.filename} "
+                               f"(page-{page_num})")
+                return
             self.repository.bulk_upsert_records(nca_data.records)
+
+            if len(nca_data.allocations) == 0:
+                logger.warning(f"No allocations to load "
+                               f"for {release.filename} "
+                               f"(page-{page_num})")
+                return
             self.repository.bulk_insert_allocations(nca_data.allocations)
-            logger.debug(f"Loaded {release.filename} data to db: "
-                         f"page-{page_num}")
+
+            logger.debug(f"Loaded {release.filename} data "
+                         f"to db: page-{page_num}")
 
         except Exception as e:
             logger.warning(f"Skipped loading {release.filename} "

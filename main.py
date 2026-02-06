@@ -12,7 +12,7 @@ from src.logging_config import setup_logging
 from src.core.use_cases.extract_page_table import ExtractPageTable
 from src.infrastructure.adapters.mock_queue import MockQueue
 from src.infrastructure.adapters.supabase_repository import SupabaseRepository
-# from src.infrastructure.adapters.local_storage import LocalStorage
+from src.infrastructure.adapters.local_storage import LocalStorage
 from src.infrastructure.adapters.nca_scraper import NCAScraper
 from src.infrastructure.adapters.pd_data_cleaner import PdDataCleaner
 from src.infrastructure.adapters.pdf_parser import PDFParser
@@ -23,7 +23,7 @@ from src.infrastructure.constants import (ALLOCATION_COLUMNS,
                                           VALID_COLUMNS)
 
 # <test>
-MAX_PAGE_COUNT_TO_PUBISH = 5
+MAX_PAGE_COUNT_TO_PUBLISH = 100
 # </test>
 
 
@@ -70,8 +70,15 @@ def main():
             logger.info(f"Processing & Loading "
                         f"{release.filename} raw data to db...")
 
+            # <test>
+            if MAX_PAGE_COUNT_TO_PUBLISH is not None:
+                page_count = min(release.page_count, MAX_PAGE_COUNT_TO_PUBLISH)
+            else:
+                page_count = release.page_count
+            # </test>
+
             prev_time = time.time()
-            for page_num in tqdm(range(release.page_count),
+            for page_num in tqdm(range(page_count),
                                  desc="Processing/Loading", unit="file"):
                 # queue
                 queue_job.run(release, page_num)
@@ -89,11 +96,6 @@ def main():
                                                          release.id)
                 # load
                 load_job.run(release, cleaned_table, page_num)
-
-                # <test>
-                if page_num == MAX_PAGE_COUNT_TO_PUBISH and not None:
-                    break
-                # </test>
 
             elapsed = str(timedelta(seconds=time.time() -
                                     prev_time)).split(":")

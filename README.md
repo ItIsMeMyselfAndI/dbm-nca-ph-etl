@@ -138,8 +138,6 @@ SUPABASE_ANON_KEY=your_supabase_anon_key
 # AWS Configuration (Required for Local Dev)
 # Note: Remove AWS_REGION when deploying to Lambda as it is reserved
 AWS_REGION=ap-southeast-1 
-AWS_ACCESS_KEY_ID=your_access_key
-AWS_SECRET_ACCESS_KEY=your_secret_key
 
 # AWS Resources
 AWS_S3_BUCKET_NAME=your_s3_bucket_name

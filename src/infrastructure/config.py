@@ -16,9 +16,6 @@ class Settings(BaseSettings):
 
     AWS_LAMBDA_FUNCTION_NAME: Optional[str] = None
 
-    AWS_ACCESS_KEY_ID: str
-    AWS_SECRET_ACCESS_KEY: str
-
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

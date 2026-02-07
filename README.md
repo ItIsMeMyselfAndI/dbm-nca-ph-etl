@@ -9,21 +9,19 @@ Here is the **Table of Contents** to place at the top of your `README.md`, right
 
 ## 📖 Table of Contents
 
-* [Key Features](https://www.google.com/search?q=%23-key-features)
-* [Architecture](https://www.google.com/search?q=%23-architecture)
-* [Data Flow Breakdown](https://www.google.com/search?q=%23data-flow-breakdown)
-
-
-* [Tech Stack](https://www.google.com/search?q=%23-tech-stack)
-* [Project Structure](https://www.google.com/search?q=%23-project-structure)
-* [Installation](https://www.google.com/search?q=%23-installation)
-* [Environment Variables](https://www.google.com/search?q=%23-environment-variables)
-* [Database Setup](https://www.google.com/search?q=%23-database-setup)
-* [How to Run](https://www.google.com/search?q=%23-how-to-run)
-* [A. Locally](https://www.google.com/search?q=%23a-locally)
-* [B. AWS Deployment (Manual)](https://www.google.com/search?q=%23b-aws-deployment-manual)
-* [1. Infrastructure Setup](https://www.google.com/search?q=%231-infrastructure-setup-one-time)
-* [2. Packaging & Updating Code](https://www.google.com/search?q=%232-packaging--updating-code)
+- [Key Features](#-key-features)
+- [Architecture](#-architecture)
+  - [Data Flow Breakdown](#data-flow-breakdown)
+- [Tech Stack](#-tech-stack)
+- [Project Structure](#-project-structure)
+- [Installation](#-installation)
+- [Environment Variables](#-environment-variables)
+- [Database Setup](#-database-setup)
+- [How to Run](#-how-to-run)
+  - [A. Locally](#a-locally)
+  - [B. AWS Deployment (Manual)](#b-aws-deployment-manual)
+    - [1. Infrastructure Setup (One-Time)](#1-infrastructure-setup-one-time)
+    - [2. Packaging & Updating Code](#2-packaging--updating-code)
 
 ---
 
@@ -153,7 +151,7 @@ pip install -r requirements.txt
 
 Create a `.env` file in the root directory:
 
-```bash
+```text
 # Supabase Configuration
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_ANON_KEY=your_supabase_anon_key
@@ -307,7 +305,7 @@ cp handlers/releases_scraper_and_publisher.py dist/build_scraper/lambda_function
 
 4. **Define Dependencies:**
 Create a `requirements.txt` in the build folder with **only** the libraries needed for that specific handler:
-**Lambda A: `dbmReleasesScraperAndPublisher**`
+**Lambda A: `dbmReleasesScraperAndPublisher`**
 ```text
 bs4==0.0.2
 pdfplumber==0.11.9
@@ -315,22 +313,20 @@ pydantic-settings==2.12.0
 PyPDF2==3.0.1
 supabase==2.27.2
 tqdm==4.67.2
-
 ```
 
 
-**Lambda B: `dbmReleasePagesPublisher**`
+**Lambda B: `dbmReleasePagesPublisher`
 ```text
 pdfplumber==0.11.9
 pydantic-settings==2.12.0
 PyPDF2==3.0.1
 supabase==2.27.2
 tqdm==4.67.2
-
 ```
 
 
-**Lambda C: `dbmReleasePageProcessorAndLoader**`
+**Lambda C: `dbmReleasePageProcessorAndLoader`**
 ```text
 pandas==3.0.0
 pdfplumber==0.11.9
@@ -338,7 +334,6 @@ pydantic-settings==2.12.0
 PyPDF2==3.0.1
 supabase==2.27.2
 tqdm==4.67.2
-
 ```
 
 

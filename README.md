@@ -1,3 +1,7 @@
+Here is the final, complete `README.md`. I have added the **Installation** section at the beginning so users know how to clone the repo and install dependencies before they try to run anything.
+
+---
+
 # DBM NCA Data Pipeline
 
 A serverless ETL (Extract, Transform, Load) pipeline designed to automate the scraping, processing, and storage of Notice of Cash Allocation (NCA) documents from the Philippine Department of Budget and Management (DBM).
@@ -16,7 +20,7 @@ This project focuses exclusively on the **ingestion layer**: it autonomously mon
 
 The pipeline follows a **Fan-Out / Worker** pattern to handle high-volume document processing:
 
-![Pipeline Architecture Diagram](./dbm-nca-ph-pipeline.png)
+![Pipeline Architecture](./dbm-nca-ph-pipeline.png)
 
 ### Data Flow Breakdown
 
@@ -85,6 +89,34 @@ The pipeline follows a **Fan-Out / Worker** pattern to handle high-volume docume
 
 ```
 
+## 📦 Installation
+
+Follow these steps to set up the project locally.
+
+1. **Clone the repository:**
+```bash
+git clone https://github.com/ItIsMeMyselfAndI/dbm-nca-ph-etl.git
+cd dbm-nca-ph-etl
+
+```
+
+
+2. **Create a virtual environment:**
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows use: venv\Scripts\activate
+
+```
+
+
+3. **Install dependencies:**
+```bash
+pip install -r requirements.txt
+
+```
+
+
+
 ## ⚙️ Environment Variables
 
 Create a `.env` file in the root directory:
@@ -109,7 +141,7 @@ AWS_SQS_RELEASE_PAGE_QUEUE_URL=https://sqs.region.amazonaws.com/account-id/page-
 
 ## 🗄️ Database Setup
 
-The pipeline uses a relational schema with three core tables: `release` (PDF metadata), `record` (NCA headers), and `allocation` (line items).
+The pipeline uses a relational schema with three core tables: `release` (PDF metadata), `record`, and `allocation`.
 
 1. Log in to your **Supabase Dashboard**.
 2. Navigate to the **SQL Editor**.

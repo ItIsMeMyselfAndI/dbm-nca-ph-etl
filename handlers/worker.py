@@ -1,8 +1,10 @@
+from io import BytesIO
 import json
 import time
 import logging
 from datetime import timedelta
 from src.core.entities.release_batch import ReleaseBatch
+from src.core.use_cases.file_stream_memo_loader import FileBytesMemoLoader
 from src.core.use_cases.nca_db_loader import NCADBLoader
 from src.core.use_cases.raw_table_cleaner import RawTableCleaner
 from src.core.use_cases.raw_table_extractor import RawTableExtractor
@@ -34,6 +36,7 @@ data_cleaner = PdDataCleaner(
 repository = SupabaseRepository(db_bulk_size=DB_BULK_SIZE)
 
 # use cases
+file_bytes_loader_job = FileBytesMemoLoader(storage=storage)
 extractor_job = RawTableExtractor(storage=storage, parser=parser)
 cleaner_job = RawTableCleaner(data_cleaner=data_cleaner)
 loader_job = NCADBLoader(
@@ -58,7 +61,28 @@ def lambda_handler(event, context):
                 f"Extracting {batch.release.filename} "
                 f"batch-{batch.batch_num} tables..."
             )
-            extracted_table = extractor_job.run(batch)
+
+            # file stream memo loader
+            file_bytes = file_bytes_loader_job.run(batch.release.filename)
+            if not file_bytes:
+                continue
+
+            # extractor
+            logger.debug(
+                f"Extracting {batch.release.filename} "
+                f"batch-{batch.batch_num} tables..."
+            )
+
+            extracted_table = []
+            for i in range(batch.start_page_num, batch.end_page_num + 1):
+                table = extractor_job.run(BytesIO(file_bytes), i)
+                if not table:
+                    logger.warning(
+                        f"No tables extracted for {batch.release.filename} "
+                        f"batch-{batch.batch_num} page-{i}"
+                    )
+                    continue
+                extracted_table.extend(table)
             if not extracted_table:
                 logger.warning(
                     f"No tables extracted for {batch.release.filename} "

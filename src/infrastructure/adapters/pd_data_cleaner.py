@@ -119,12 +119,19 @@ class PdDataCleaner(DataCleanerProvider):
 
     def _join_col_to_str(self, col: List[str]):
         joined_str = ""
+        last_item = None
         for item in col:
+            if last_item == item:
+                continue
             if item and item is not np.nan:
                 joined_str += " " + item
+                last_item = item
         return joined_str
 
     def _create_df_records(self, df: pd.DataFrame):
+        df["released_date"] = pd.to_datetime(
+            df["released_date"], errors="coerce"
+        ).dt.strftime("%Y-%m-%dT%H:%M:%S")
         df_records = pd.DataFrame(df[self.record_columns]).drop_duplicates(
             subset="nca_number"
         )

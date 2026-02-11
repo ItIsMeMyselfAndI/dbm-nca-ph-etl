@@ -3,7 +3,6 @@ from typing import List
 from PyPDF2 import PdfReader, PdfWriter
 import pdfplumber
 from pdfplumber.page import Page
-
 from src.core.entities.metadata import MetaData
 from src.core.interfaces.parser import ParserProvider
 from src.infrastructure.constants import TABLE_COLUMNS
@@ -24,10 +23,12 @@ class PDFParser(ParserProvider):
     def get_metadata_by_data(self, data: BytesIO) -> MetaData:
         reader = PdfReader(data)
         meta = reader.metadata
-        metadata = MetaData(**{
-            "created_at": meta.get('/CreationDate'),  # pyright: ignore
-            "modified_at": meta.get('/ModDate')  # pyright: ignore
-        })
+        metadata = MetaData(
+            **{
+                "created_at": meta.get("/CreationDate"),  # pyright: ignore
+                "modified_at": meta.get("/ModDate"),  # pyright: ignore
+            }
+        )
         return metadata
 
     def get_page_count(self, data: BytesIO) -> int:
@@ -48,9 +49,9 @@ class PDFParser(ParserProvider):
 
         return data_list
 
-    def extract_table_by_page_num(self, data: BytesIO,
-                                  page_num: int
-                                  ) -> List[List[str | None]]:
+    def extract_table_by_page_num(
+        self, data: BytesIO, page_num: int
+    ) -> List[List[str | None]]:
         raw_rows: List[List[str | None]] = []
 
         with pdfplumber.open(data) as pdf:
@@ -85,7 +86,7 @@ class PDFParser(ParserProvider):
             phrase_words = phrase.lower().split("_")
             n = len(phrase_words)
             for i in range(len(texts) - n + 1):
-                curr_phrase = "_".join(texts[i:i+n]).lower()
+                curr_phrase = "_".join(texts[i : i + n]).lower()
                 if curr_phrase == phrase:
                     vert_lines.append(words[i]["x0"])
                     found_phrases.add(phrase)

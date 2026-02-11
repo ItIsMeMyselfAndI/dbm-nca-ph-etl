@@ -17,11 +17,11 @@ class ParserProvider(Protocol):
         """split multi-page file into single-page pdfs"""
         ...
 
-    def extract_table_by_page_num(self, data: BytesIO,
-                                  page_num: int
-                                  ) -> List[List[str | None]]:
+    def extract_table_by_page_num(
+        self, data: BytesIO, page_num: int
+    ) -> List[List[str | None]]:
         """
-            extract file page's table/s between
-            and return list of string/none lists
+        extract file page's table/s between
+        and return list of string/none lists
         """
         ...

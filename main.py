@@ -73,28 +73,36 @@ def main():
     logger.info("Initializing NCA Pipeline...")
 
     try:
+        # ---------------------
+        # scraper
+        # ---------------------
+
         # scrape
         logger.info("Starting Scraping Job...")
         releases = scraper_job.run(oldest_release_year=2024)
-        logger.info("Job completed successfully.")
+        logger.info("Scraper Job completed successfully.")
+
         # queue
         logger.info("Starting Queueing Job...")
+        success_count = 0
         for release in releases:
-            logger.info(f"Queueing {release.filename} metadata...")
-            queuer_job.run(release)
-            logger.debug(f"Queued {release.filename} metadata: {release}")
-        logger.info("Job completed successfully.")
+            is_queued = queuer_job.run(release)
+            if is_queued:
+                success_count += 1
+        logger.info(f"Successfully queued {success_count}/{len(releases)} releases.")
+        logger.info("Queuer completed successfully.")
 
         for release in releases:
             prev_time = time.time()
 
-            # batcher
-            batches = batcher_job.run(release)
-            logger.info(
-                f"Batched release: {release.filename} into {len(batches)} batches."
-            )
+            # ---------------------
+            # orchestrator
+            # ---------------------
 
-            logger.info("Starting queuer job...")
+            # batcher
+            logger.info("Starting batcher job...")
+            batches = batcher_job.run(release)
+            logger.info("Batcher job completed.")
 
             # <test>
             if BATCH_COUNT_TO_QUEUE is not None:
@@ -104,21 +112,22 @@ def main():
             # </test>
 
             # queuer
+            logger.info("Starting queuer job...")
+            succcess_count = 0
             for batch in batches:
-                logger.debug(
-                    f"Queueing {release.id} batch-{batch.batch_num} metadata..."
-                )
-                queuer_job.run(batch)
-                logger.debug(
-                    f"Queued {release.filename} "
-                    f"batch-{batch.batch_num} metadata: {batch}"
-                )
+                is_queued = queuer_job.run(batch)
+                if is_queued:
+                    succcess_count += 1
             logger.info(
-                f"Queued {len(batches)} batches for release: {release.filename}"
+                f"Successfully queued {succcess_count}/{len(batches)} batches for "
+                f"{release.filename}."
             )
             logger.info("Queuer job completed.")
 
-            # processor
+            # ---------------------
+            # worker
+            # ---------------------
+
             logger.info("Starting Processing & Loading Job...")
             for batch in tqdm(
                 batches, desc=f"Processing/Loading {release.filename}", unit="batch"
@@ -133,7 +142,6 @@ def main():
                     f"Extracting {batch.release.filename} "
                     f"batch-{batch.batch_num} tables..."
                 )
-
                 extracted_table = []
                 for i in range(batch.start_page_num, batch.end_page_num + 1):
                     table = extractor_job.run(BytesIO(file_bytes), i)

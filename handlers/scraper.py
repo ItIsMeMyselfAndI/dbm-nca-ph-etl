@@ -40,23 +40,20 @@ queuer_job = MessageQueuer(queue=queue)
 def lambda_handler(event, context):
     start_time = time.monotonic()
 
-    logger.info("Starting scraper job...")
-    releases = scraper_job.run()
-    logger.info("Scraper job completed.")
+    # scrape
+    logger.info("Starting Scraping Job...")
+    releases = scraper_job.run(oldest_release_year=2024)
+    logger.info("Scraper Job completed successfully.")
 
-    logger.info("Starting queuer job...")
-
+    # queue
+    logger.info("Starting Queueing Job...")
+    success_count = 0
     for release in releases:
-        try:
-            queuer_job.run(release)
-            logger.info(f"Queued release: {release.filename}")
-
-        except Exception as e:
-            logger.error(
-                f"Failed to queue release {release.filename}: {e}", exc_info=True
-            )
-
-    logger.info("Queuer job completed.")
+        is_queued = queuer_job.run(release)
+        if is_queued:
+            success_count += 1
+    logger.info(f"Successfully queued {success_count}/{len(releases)} releases.")
+    logger.info("Queuer completed successfully.")
 
     end_time = time.monotonic()
     elapsed_time = timedelta(seconds=end_time - start_time)

@@ -39,12 +39,9 @@ def lambda_handler(event, context):
             release = Release(**payload)
 
             # batcher
+            logger.info("Starting batcher job...")
             batches = batcher_job.run(release)
-            logger.info(
-                f"Batched release: {release.filename} into {len(batches)} batches."
-            )
-
-            logger.info("Starting queuer job...")
+            logger.info("Batcher job completed.")
 
             # <test>
             if BATCH_COUNT_TO_QUEUE is not None:
@@ -53,18 +50,16 @@ def lambda_handler(event, context):
                 logger.info(f"Limiting to {batch_count} batches for testing purposes.")
             # </test>
 
+            # queuer
+            logger.info("Starting queuer job...")
+            succcess_count = 0
             for batch in batches:
-                logger.debug(
-                    f"Queueing {release.id} batch-{batch.batch_num} metadata..."
-                )
-                queuer_job.run(batch)
-                logger.debug(
-                    f"Queued {release.filename} "
-                    f"batch-{batch.batch_num} metadata: {batch}"
-                )
-
+                is_queued = queuer_job.run(batch)
+                if is_queued:
+                    succcess_count += 1
             logger.info(
-                f"Queued {len(batches)} batches for release: {release.filename}"
+                f"Successfully queued {succcess_count}/{len(batches)} batches for "
+                f"{release.filename}."
             )
             logger.info("Queuer job completed.")
 

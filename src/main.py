@@ -42,8 +42,8 @@ logger = logging.getLogger(__name__)
 # adapters
 scraper = Bs4Scraper()
 # scraper = ScrapyScraper()
-# storage = LocalStorage(base_storage_path=BASE_STORAGE_PATH)
-storage = S3Storage(base_storage_path=BASE_STORAGE_PATH)
+storage = LocalStorage(base_storage_path=BASE_STORAGE_PATH)
+# storage = S3Storage(base_storage_path=BASE_STORAGE_PATH)
 parser = PDFParser()
 queue = MockQueue()
 data_cleaner = PdDataCleaner(

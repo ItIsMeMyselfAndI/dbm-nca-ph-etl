@@ -44,6 +44,7 @@ CREATE TABLE public.allocation (
 CREATE INDEX IF NOT EXISTS idx_release_id ON public.release(id);
 CREATE INDEX IF NOT EXISTS idx_record_id ON public.record(id);
 CREATE INDEX IF NOT EXISTS idx_record_nca_number ON public.record(nca_number);
+CREATE INDEX IF NOT EXISTS idx_record_released_date ON public.record(released_date);
 CREATE INDEX IF NOT EXISTS idx_record_release_id ON public.record(release_id);
 CREATE INDEX IF NOT EXISTS idx_allocation_id ON public.allocation(id);
 CREATE INDEX IF NOT EXISTS idx_allocation_nca_number ON public.allocation(nca_number);

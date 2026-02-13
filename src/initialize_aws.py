@@ -36,7 +36,7 @@ def main():
 
     # buckets
     if not is_bucket_exists(release_files_bucket_name):
-        create_bucket(release_batch_queue_name)
+        create_bucket(release_files_bucket_name)
 
     if not is_bucket_exists(lambda_deployments_bucket_name):
         create_bucket(lambda_deployments_bucket_name)
@@ -76,6 +76,7 @@ def main():
         scraper_lambda_info = create_lambda_function(
             function_name=scraper_lambda_name,
             role_arn=lambda_role_info["arn"],
+            max_cuncurrent_executions=40,
         )
 
     orchestrator_lambda_info = get_lambda_function(orchestrator_lambda_name)
@@ -84,6 +85,8 @@ def main():
             function_name=orchestrator_lambda_name,
             role_arn=lambda_role_info["arn"],
             queue_arn=release_queue_info.get("arn", None),
+            queue_batch_size=10,
+            max_cuncurrent_executions=40,
         )
 
     worker_lambda_info = get_lambda_function(worker_lambda_name)
@@ -92,6 +95,8 @@ def main():
             function_name=worker_lambda_name,
             role_arn=lambda_role_info["arn"],
             queue_arn=release_batch_queue_info.get("arn", None),
+            queue_batch_size=1,
+            max_cuncurrent_executions=40,
         )
 
 
@@ -114,7 +119,13 @@ def is_bucket_exists(bucket_name: str) -> bool:
 def create_bucket(bucket_name: str) -> None:
     s3 = boto3.client("s3")
     try:
-        s3.create_bucket(Bucket=bucket_name)
+        s3.create_bucket(
+            Bucket=bucket_name,
+            CreateBucketConfiguration={
+                "LocationConstraint": settings.AWS_REGION,
+            },
+            ACL="private",
+        )
         logger.info(f"Bucket '{bucket_name}' created successfully.")
 
     except Exception as e:
@@ -259,6 +270,7 @@ def create_lambda_function(
     role_arn: str,
     queue_arn: str | None = None,
     queue_batch_size: int = 10,
+    max_cuncurrent_executions: int = 40,
 ) -> dict | None:
     lambda_client = boto3.client("lambda")
 
@@ -288,7 +300,11 @@ def create_lambda_function(
                 FunctionName=function_name,
                 BatchSize=queue_batch_size,
                 Enabled=True,
+                ScalingConfig={
+                    "MaximumConcurrency": max_cuncurrent_executions,
+                },
             )
+
         logger.info(
             f"Lambda function '{function_name}' created successfully"
             f"\n(ARN) {response['FunctionArn']}"

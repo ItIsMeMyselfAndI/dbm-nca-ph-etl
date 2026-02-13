@@ -13,7 +13,7 @@ from src.infrastructure.config import settings
 from src.infrastructure.constants import BATCH_SIZE
 
 # <test>
-BATCH_COUNT_TO_QUEUE = 1
+NUMBER_OF_BATCHES_TO_QUEUE = None
 # </test>
 
 
@@ -44,8 +44,8 @@ def lambda_handler(event, context):
             logger.info("Batcher job completed.")
 
             # <test>
-            if BATCH_COUNT_TO_QUEUE is not None:
-                batch_count = min(BATCH_COUNT_TO_QUEUE, len(batches))
+            if NUMBER_OF_BATCHES_TO_QUEUE is not None:
+                batch_count = min(NUMBER_OF_BATCHES_TO_QUEUE, len(batches))
                 batches = batches[:batch_count]
                 logger.info(f"Limiting to {batch_count} batches for testing purposes.")
             # </test>

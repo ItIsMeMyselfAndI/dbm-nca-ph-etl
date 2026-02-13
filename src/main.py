@@ -32,7 +32,7 @@ from src.infrastructure.constants import (
 )
 
 # <test>
-BATCH_COUNT_TO_QUEUE = 1
+NUMBER_OF_BATCHES_TO_QUEUE = 1
 # </test>
 
 
@@ -107,8 +107,8 @@ def main():
             logger.info("Batcher job completed.")
 
             # <test>
-            if BATCH_COUNT_TO_QUEUE is not None:
-                batch_count = min(BATCH_COUNT_TO_QUEUE, len(batches))
+            if NUMBER_OF_BATCHES_TO_QUEUE is not None:
+                batch_count = min(NUMBER_OF_BATCHES_TO_QUEUE, len(batches))
                 batches = batches[:batch_count]
                 logger.info(f"Limiting to {batch_count} batches for testing purposes.")
             # </test>

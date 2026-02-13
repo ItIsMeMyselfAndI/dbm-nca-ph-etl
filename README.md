@@ -17,7 +17,7 @@ This project focuses exclusively on the **ingestion layer**: it autonomously mon
 - [Database Setup](#database-setup)
 - [How to Run](#how-to-run)
   - [A. Locally](#a-locally)
-  - [B. AWS Deployment (Manual)](#b-aws-deployment-manual)
+  - [B. AWS Deployment (Manual)](#b-aws-deployment)
     - [1. Infrastructure Setup (One-Time)](#1-infrastructure-setup-one-time)
     - [2. Packaging & Updating Code](#2-packaging--updating-code)
 
@@ -138,18 +138,20 @@ class ReleaseBatch(BaseModel):
 │   ├── dbmOrchestrator_requirements.txt
 │   └── dbmWorker_requirements.txt
 │
-├── src/                                    # Application Core (Framework Agnostic)
+├── src/                                    # Application Core (Framework Independent)
 │   ├── core/                               # Inner Layer (Business Rules)
 │   │   ├── entities/                       # Data models
 │   │   ├── use_cases/                      # Application logic
 │   │   └── interfaces/                     # Abstract base classes (Ports)
 │   │
-│   └── infrastructure/                     # Outer Layer (External Systems)
-│       ├── adapters/                       # Implementations of interfaces
-│       ├── config.py                       # Environment variable management
-│       └── constants.py                    # App-wide constants
+│   ├── infrastructure/                     # Outer Layer (External Systems/Frameworks)
+│   │   ├── adapters/                       # Implementations of interfaces
+│   │   ├── config.py                       # Environment variable management
+│   │   └── constants.py                    # App-wide constants
+│   │
+│   ├── main.py                             # Local execution entry point (for dev/debugging without AWS)
+│   └── initialize_aws.py                   # Script to set up AWS resources (S3, SQS, Lambda)
 │
-├── main.py                                 # Local execution entry point (for dev/debugging without AWS)
 ├── requirements.txt                        # Main project dependencies
 └── supabase_schema.sql                     # Database initialization script
 
@@ -179,26 +181,6 @@ pip install -r requirements.txt
 ```
 
 
-
-## ⚙️ Environment Variables
-
-Create a `.env` file in the root directory:
-
-```bash
-# Supabase Configuration
-SUPABASE_URL=your_supabase_project_url
-SUPABASE_ANON_KEY=your_supabase_anon_key
-
-# AWS Configuration (Required for Local Dev)
-# Note: Remove AWS_REGION when deploying to Lambda as it is reserved
-AWS_REGION=ap-southeast-1 
-
-# AWS Resources
-AWS_S3_BUCKET_NAME=your_s3_bucket_name
-AWS_SQS_RELEASE_QUEUE_URL=https://sqs.region.amazonaws.com/account-id/release-queue
-AWS_SQS_RELEASE_BATCH_QUEUE_URL=https://sqs.region.amazonaws.com/account-id/batch-queue
-
-```
 
 ## 🗄️ Database Setup
 
@@ -262,70 +244,107 @@ CREATE TABLE public.allocation (
 
 To test the pipeline logic on your machine without deploying to Lambda:
 
-1. **Configure AWS CLI:**
-Set up your AWS profile with the necessary permissions.
+1. Activate your virtual environment if not already done.
 ```bash
-aws configure --profile dbm-dev
-
+source venv/bin/activate
 ```
 
-
-2. **Setup Environment:**
-Ensure your `.env` file is populated (see above).
-3. **Export Profile:**
-Tell `boto3` which profile to use.
-```bash
-export AWS_PROFILE=dbm-dev
-
-```
-
-
-4. **Run Main Script:**
+2. **Run Main Script:**
 Execute the local entry point.
 ```bash
-python main.py
-
+python -m src.main
 ```
 
 
 
 ### B. AWS Deployment
+#### 1. Install AWS CLI
+Make sure you have the AWS CLI installed and configured on your machine.
+```bash
+pip install awscli
+```
 
-To deploy or update the Lambda functions, you must first create the infrastructure and then package the code manually.
+#### 2. Configure AWS CLI
 
-#### 1. Infrastructure Setup (One-Time)
+Set up your AWS profile with the necessary permissions.
+```bash
+aws configure
+```
 
-Before deploying code, create the following resources in your AWS Console:
+#### 3. Environment Setup
 
-1. **S3 Bucket:** Create a bucket for storing PDFs.
-* *Note the name for `AWS_S3_BUCKET_NAME`.*
+Create a `.env` file in the root directory:
 
+```bash
+# Supabase Configuration
+SUPABASE_URL=<SUPABASE_PROJECT_URL>
+SUPABASE_ANON_KEY=<SUPABASE_ANON_KEY>
 
-2. **SQS Queue A:** Create a standard queue for release metadata.
-* *Note the URL for `AWS_SQS_RELEASE_QUEUE_URL`.*
+# AWS Configuration (Required for Local Dev)
+# Note: Remove AWS_REGION when deploying to Lambda as it is reserved
+AWS_REGION=<REGION>
 
+# AWS Resources
+AWS_S3_BUCKET_NAME=dbm-nca-ph-release-files
+AWS_SQS_RELEASE_QUEUE_URL=https://sqs.<REGION>.amazonaws.com/<ACCOUNT_ID>/dbm-nca-ph-release-queue
+AWS_SQS_RELEASE_BATCH_QUEUE_URL=https://sqs.<REGION>.amazonaws.com/<ACCOUNT_ID>/dbm-nca-ph-release-batch-queue
+```
 
-3. **SQS Queue B:** Create a standard queue for **page batches**.
-* *Note the URL for `AWS_SQS_RELEASE_BATCH_QUEUE_URL`.*
+> [!NOTE]
+> Remember to replace placeholders with their actual values.
+> - **SUPABSE_PROJECT_URL**
+> - **SUPABASE_ANON_KEY**
+> - **REGION**
+> - **ACCOUNT_ID**
 
+#### 4. Infrastructure Setup (One-Time)
 
-4. **Lambda A (Scraper):** Create a function named **`dbmScraper`**.
+Before deploying the codes, run the script to set up the necessary AWS resources.
+
+```bash
+python -m src.initialize_aws
+```
+
+##### The script will create the following resources:
+
+1. **S3 Bucket A**
+* *Name:* `dbm-nca-ph-release-files`
+* *Description:* A bucket for storing raw PDF files of NCA releases. The scraper uploads the PDFs here, and the orchestrator/worker functions read from this bucket to process the data.
+* *Note:* Name is similar to `AWS_S3_BUCKET_NAME` in the environment variables.
+
+2. **S3 Bucket B**
+* *Name:* `dbm-nca-ph-lambda-deployment`
+* *Description:* A bucket for Lambda deployment packages (optional, can also use direct upload).
+
+2. **SQS Queue A**
+* *Name:* `dbm-nca-ph-release-queue`
+* *Description:* A standard queue for **release messages**. Each message contains metadata about a new NCA release and triggers the orchestration process.
+* *Note*: URL is the same as `AWS_SQS_RELEASE_QUEUE_URL` in the environment variables.
+
+3. **SQS Queue B**
+* *Name:* `dbm-nca-ph-release-batch-queue`
+* *Description:* A standard queue for **batch messages**. Each message contains information about a specific batch of pages to process, triggered by the orchestrator and consumed by the worker.
+* *Note*: URL is the same as `AWS_SQS_RELEASE_BATCH_QUEUE_URL` in the environment variables.
+
+4. **Lambda A (Scraper)**
+* *Name:* `dbmScraper`
+* *Description:* A function that scrapes the DBM website for new NCA releases, uploads PDFs to S3, insert entries to Supabase, and pushes metadata messages to **SQS A**.
 * *Runtime:* Python 3.14
 
-
-5. **Lambda B (Orchestrator):** Create a function named **`dbmOrchestrator`**.
+5. **Lambda B (Orchestrator)**
+* *Name:* `dbmOrchestrator`
+* *Description:* A function that listens to **SQS A**, downloads the PDF from S3 to determine page count, creates batches of pages, and pushes batch messages to **SQS B**.
 * *Runtime:* Python 3.14
-* *Trigger:* Add **SQS Queue A** as the trigger.
+* *Trigger:* **SQS Queue A**
 
-
-6. **Lambda C (Worker):** Create a function named **`dbmWorker`**.
+6. **Lambda C (Worker):**
+* *Name:* `dbmWorker`
+* *Description:* A function that listens to **SQS B**, downloads the PDF for the specified batch, extracts and processes the data, and inserts structured records into Supabase.
 * *Runtime:* Python 3.14
-* *Trigger:* Add **SQS Queue B** as the trigger.
-* **Crucial:** Set the **Batch size** to `1`. This ensures each Lambda invocation handles exactly one "work unit" (which internally contains a batch of pages).
+* *Trigger:* **SQS Queue B**
 
 
-
-#### 2. Deploying Updates (Automated)
+#### 5. Deploying Updates (Automated)
 
 Navigate to the `handlers/` directory and use the deployment script:
 
@@ -335,10 +354,12 @@ Navigate to the `handlers/` directory and use the deployment script:
 ./deploy.sh scraper.py dbmScraper
 ./deploy.sh orchestrator.py dbmOrchestrator
 ./deploy.sh worker.py dbmWorker
-
 ```
 
 > [!IMPORTANT]
 > **Naming Convention:** The script strictly requires requirements files to be named `<FUNCTION_NAME>_requirements.txt`. Ensure your handler names match your AWS Lambda function names to avoid deployment conflicts.
+
+> [!WARNING]
+> This has only been tested on Unix-based systems (Linux/Mac). Windows users may need to modify the script or deploy manually via the AWS Console.
 
 ---

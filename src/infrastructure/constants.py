@@ -54,3 +54,26 @@ ALLOCATION_COLUMNS = ["nca_number", "agency", "operating_unit", "amount"]
 
 # database
 DB_BULK_SIZE = 500
+
+# --------------
+# AWS
+# --------------
+
+# sqs names
+DLQ_NAME = "dbm-nca-ph-failed-queues"
+RELEASE_QUEUE_NAME = "dbm-nca-ph-release-queue"
+RELEASE_BATCH_QUEUE_NAME = "dbm-nca-ph-release-batch-queue"
+
+# lamda
+SCRAPER_FUNCTION_NAME = "dbmScraper"
+ORCHESTRATOR_FUNCTION_NAME = "dbmOrchestrator"
+WORKER_FUNCTION_NAME = "dbmWorker"
+TEARDOWN_FUNCTION_NAME = "dbmTeardown"
+
+# sns topic names
+# RELEASE_SNS_TOPIC_NAME = f"{RELEASE_QUEUE_NAME}-idle-topic"
+RELEASE_BATCH_SNS_TOPIC_NAME = f"{RELEASE_BATCH_QUEUE_NAME}-idle-topic"
+
+# cloudwatch alaram names
+# RELEASE_ALARM_NAME = f"{RELEASE_QUEUE_NAME}-idle-alarm"
+RELEASE_BATCH_ALARM_NAME = f"{RELEASE_BATCH_QUEUE_NAME}-idle-alarm"

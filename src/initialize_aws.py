@@ -498,7 +498,7 @@ def create_cloudwatch_alarm(
             Namespace="AWS/SQS",
             Statistic="Maximum",
             Dimensions=[{"Name": "QueueName", "Value": queue_name}],
-            Period=300,
+            Period=300,  # 3 mins
             EvaluationPeriods=3,
             DatapointsToAlarm=3,
             Threshold=0,

@@ -5,6 +5,8 @@ import sys
 from tqdm import tqdm
 from datetime import timedelta
 
+from src.core.use_cases.disable_lambda_triggers import DisableLambdaTriggers
+from src.core.use_cases.enable_lambda_triggers import EnableLambdaTriggers
 from src.core.use_cases.file_stream_memo_loader import FileBytesMemoLoader
 from src.core.use_cases.message_queuer import MessageQueuer
 from src.core.use_cases.nca_db_loader import NCADBLoader
@@ -13,6 +15,9 @@ from src.core.use_cases.raw_table_extractor import RawTableExtractor
 from src.core.use_cases.release_batcher import ReleaseBatcher
 from src.core.use_cases.releases_scraper import ReleasesScraper
 from src.infrastructure.adapters.bs4_scraper import Bs4Scraper
+from src.infrastructure.adapters.lambda_serverless_function import (
+    LambdaServerlessFunction,
+)
 from src.infrastructure.adapters.s3_storage import S3Storage
 from src.infrastructure.adapters.scrapy_scraper import ScrapyScraper
 from src.logging_config import setup_logging
@@ -27,8 +32,10 @@ from src.infrastructure.constants import (
     BASE_STORAGE_PATH,
     BATCH_SIZE,
     DB_BULK_SIZE,
+    ORCHESTRATOR_FUNCTION_NAME,
     RECORD_COLUMNS,
     VALID_COLUMNS,
+    WORKER_FUNCTION_NAME,
 )
 
 # <test>
@@ -40,6 +47,7 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 # adapters
+serverless_function = LambdaServerlessFunction()
 scraper = Bs4Scraper()
 # scraper = ScrapyScraper()
 storage = LocalStorage(base_storage_path=BASE_STORAGE_PATH)
@@ -54,6 +62,7 @@ data_cleaner = PdDataCleaner(
 repository = SupabaseRepository(db_bulk_size=DB_BULK_SIZE)
 
 # use cases
+enable_triggers_job = EnableLambdaTriggers(serverless_function=serverless_function)
 scraper_job = ReleasesScraper(
     scraper=scraper,
     parser=parser,
@@ -69,6 +78,9 @@ db_loader_job = NCADBLoader(
     data_cleaner=data_cleaner,
     repository=repository,
 )
+disable_triggers_job = DisableLambdaTriggers(serverless_function=serverless_function)
+
+TARGET_FUNCTIONS = [ORCHESTRATOR_FUNCTION_NAME, WORKER_FUNCTION_NAME]
 
 
 def main():
@@ -78,6 +90,12 @@ def main():
         # ---------------------
         # scraper
         # ---------------------
+
+        # enable lambda triggers
+        logger.info("Starting Lambda Trigger Management Job...")
+        for function_name in TARGET_FUNCTIONS:
+            enable_triggers_job.run(function_name)
+        logger.info("Lambda Trigger Management Job completed successfully.")
 
         # scrape
         logger.info("Starting Scraping Job...")
@@ -192,6 +210,14 @@ def main():
                 f"{elapsed[2]}s: "
                 f"{release.filename}"
             )
+
+        # teardown
+        # disable lambda triggers
+        logger.info("Starting Lambda Trigger Management Job...")
+        for function_name in TARGET_FUNCTIONS:
+            disable_triggers_job.run(function_name)
+        logger.info("Lambda Trigger Management Job completed successfully.")
+
         logger.info("Jobs completed successfully.")
 
     except Exception as e:

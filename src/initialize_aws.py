@@ -6,6 +6,17 @@ import boto3
 from botocore.exceptions import ClientError
 
 from src.infrastructure.config import settings
+from src.infrastructure.constants import (
+    DLQ_NAME,
+    ORCHESTRATOR_FUNCTION_NAME,
+    RELEASE_BATCH_ALARM_NAME,
+    RELEASE_BATCH_QUEUE_NAME,
+    RELEASE_BATCH_SNS_TOPIC_NAME,
+    RELEASE_QUEUE_NAME,
+    SCRAPER_FUNCTION_NAME,
+    TEARDOWN_FUNCTION_NAME,
+    WORKER_FUNCTION_NAME,
+)
 from src.logging_config import setup_logging
 
 setup_logging()
@@ -24,15 +35,7 @@ def main():
     release_files_bucket_name = "dbm-nca-ph-release-files"
     lambda_deployments_bucket_name = "dbm-nca-ph-lambda-deployments"
 
-    dlq_name = "dbm-nca-ph-failed-queues"
-    release_queue_name = "dbm-nca-ph-release-queue"
-    release_batch_queue_name = "dbm-nca-ph-release-batch-queue"
-
     lambda_role_name = "dbm-nca-ph-lambda-role"
-
-    scraper_lambda_name = "dbmScraper"
-    orchestrator_lambda_name = "dbmOrchestrator"
-    worker_lambda_name = "dbmWorker"
 
     # buckets
     if not is_bucket_exists(release_files_bucket_name):
@@ -42,19 +45,19 @@ def main():
         create_bucket(lambda_deployments_bucket_name)
 
     # dead letter queue
-    dlq_info = get_queue(dlq_name)
+    dlq_info = get_queue(DLQ_NAME)
     if not dlq_info:
-        dlq_info = create_queue(dlq_name)
+        dlq_info = create_queue(DLQ_NAME)
 
     # queues
-    release_queue_info = get_queue(release_queue_name)
+    release_queue_info = get_queue(RELEASE_QUEUE_NAME)
     if not release_queue_info and dlq_info:
-        release_queue_info = create_queue(release_queue_name, dlq_info["arn"])
+        release_queue_info = create_queue(RELEASE_QUEUE_NAME, dlq_info["arn"])
 
-    release_batch_queue_info = get_queue(release_batch_queue_name)
+    release_batch_queue_info = get_queue(RELEASE_BATCH_QUEUE_NAME)
     if not release_batch_queue_info and dlq_info:
         release_batch_queue_info = create_queue(
-            release_batch_queue_name, dlq_info["arn"]
+            RELEASE_BATCH_QUEUE_NAME, dlq_info["arn"]
         )
 
     if not release_queue_info or not release_batch_queue_info:
@@ -71,32 +74,75 @@ def main():
         return
 
     # lambdas
-    scraper_lambda_info = get_lambda_function(scraper_lambda_name)
+    scraper_lambda_info = get_lambda_function(SCRAPER_FUNCTION_NAME)
     if not scraper_lambda_info:
         scraper_lambda_info = create_lambda_function(
-            function_name=scraper_lambda_name,
+            function_name=SCRAPER_FUNCTION_NAME,
             role_arn=lambda_role_info["arn"],
             max_cuncurrent_executions=40,
         )
 
-    orchestrator_lambda_info = get_lambda_function(orchestrator_lambda_name)
+    orchestrator_lambda_info = get_lambda_function(ORCHESTRATOR_FUNCTION_NAME)
     if not orchestrator_lambda_info:
         orchestrator_lambda_info = create_lambda_function(
-            function_name=orchestrator_lambda_name,
+            function_name=ORCHESTRATOR_FUNCTION_NAME,
             role_arn=lambda_role_info["arn"],
             queue_arn=release_queue_info.get("arn", None),
             queue_batch_size=10,
             max_cuncurrent_executions=40,
         )
 
-    worker_lambda_info = get_lambda_function(worker_lambda_name)
+    worker_lambda_info = get_lambda_function(WORKER_FUNCTION_NAME)
     if not worker_lambda_info and lambda_role_info and release_queue_info:
         worker_lambda_info = create_lambda_function(
-            function_name=worker_lambda_name,
+            function_name=WORKER_FUNCTION_NAME,
             role_arn=lambda_role_info["arn"],
             queue_arn=release_batch_queue_info.get("arn", None),
             queue_batch_size=1,
             max_cuncurrent_executions=40,
+        )
+
+    teardown_lambda_info = get_lambda_function(TEARDOWN_FUNCTION_NAME)
+    if not teardown_lambda_info:
+        teardown_lambda_info = create_lambda_function(
+            function_name=TEARDOWN_FUNCTION_NAME,
+            role_arn=lambda_role_info["arn"],
+            max_cuncurrent_executions=1,
+        )
+
+    # notification
+    release_batch_sns_topic_info = get_sns_topic(RELEASE_BATCH_SNS_TOPIC_NAME)
+    if not release_batch_sns_topic_info:
+        release_batch_sns_topic_info = create_sns_topic(RELEASE_BATCH_SNS_TOPIC_NAME)
+
+    # subscription
+    if release_batch_sns_topic_info and teardown_lambda_info:
+        release_batch_subscription_info = get_sns_lambda_subscription(
+            topic_arn=release_batch_sns_topic_info["arn"],
+            lambda_arn=teardown_lambda_info["arn"],
+        )
+        if not release_batch_subscription_info:
+            subscribe_lambda_to_sns_topic(
+                topic_arn=release_batch_sns_topic_info["arn"],
+                lambda_arn=teardown_lambda_info["arn"],
+            )
+
+    if release_batch_sns_topic_info:
+        add_lambda_sns_permission(
+            TEARDOWN_FUNCTION_NAME, release_batch_sns_topic_info["arn"]
+        )
+
+    # cloudwatch
+    release_batch_cloudwatch_alarm_info = get_cloudwatch_alarm(RELEASE_BATCH_ALARM_NAME)
+    if (
+        release_batch_sns_topic_info
+        and release_batch_queue_info
+        and not release_batch_cloudwatch_alarm_info
+    ):
+        create_cloudwatch_alarm(
+            alarm_name=RELEASE_BATCH_ALARM_NAME,
+            topic_arn=release_batch_sns_topic_info["arn"],
+            queue_name=RELEASE_BATCH_QUEUE_NAME,
         )
 
 
@@ -226,6 +272,7 @@ def create_lambda_iam_role(role_name: str) -> dict | None:
         "arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole",
         "arn:aws:iam::aws:policy/AmazonSQSFullAccess",
         "arn:aws:iam::aws:policy/AmazonS3FullAccess",
+        "arn:aws:iam::aws:policy/AWSLambda_FullAccess",
     ]
 
     try:
@@ -313,6 +360,156 @@ def create_lambda_function(
 
     except Exception as e:
         logger.error(f"Error creating Lambda function: {e}")
+        return None
+
+
+def get_sns_topic(topic_name: str) -> dict | None:
+    sns_client = boto3.client("sns")
+    try:
+        response = sns_client.list_topics()
+        for topic in response.get("Topics", []):
+            if topic_name in topic["TopicArn"]:
+                logger.info(
+                    f"SNS topic '{topic_name}' exists" f"\n(ARN) {topic['TopicArn']}"
+                )
+                return {"arn": topic["TopicArn"]}
+        logger.info(f"SNS topic '{topic_name}' does not exist.")
+        return None
+
+    except Exception as e:
+        logger.error(f"Error getting SNS topic: {e}")
+        return None
+
+
+def create_sns_topic(topic_name: str) -> dict | None:
+    sns_client = boto3.client("sns")
+    try:
+        response = sns_client.create_topic(Name=topic_name)
+        logger.info(
+            f"SNS topic '{topic_name}' created successfully"
+            f"\n(ARN) {response['TopicArn']}"
+        )
+        return {"arn": response["TopicArn"]}
+
+    except Exception as e:
+        logger.error(f"Error creating SNS topic: {e}")
+        return None
+
+
+def get_sns_lambda_subscription(topic_arn: str, lambda_arn: str) -> dict | None:
+    sns_client = boto3.client("sns")
+    try:
+        response = sns_client.list_subscriptions_by_topic(TopicArn=topic_arn)
+        for subscription in response.get("Subscriptions", []):
+            if (
+                subscription["Protocol"] == "lambda"
+                and subscription["Endpoint"] == lambda_arn
+            ):
+                logger.info(
+                    f"Lambda '{lambda_arn}' subscription to SNS topic '{topic_arn}' exists"
+                    f"\n(Subscription ARN) {subscription['SubscriptionArn']}"
+                )
+                return {"arn": subscription["SubscriptionArn"]}
+        logger.info(
+            f"Lambda '{lambda_arn}' subscription to SNS topic '{topic_arn}' does not exist."
+        )
+        return None
+
+    except Exception as e:
+        logger.error(f"Error getting SNS subscription: {e}")
+        return None
+
+
+def subscribe_lambda_to_sns_topic(topic_arn: str, lambda_arn: str) -> dict | None:
+    sns_client = boto3.client("sns")
+    try:
+        response = sns_client.subscribe(
+            TopicArn=topic_arn,
+            Protocol="lambda",
+            Endpoint=lambda_arn,
+        )
+        logger.info(
+            f"Subscribed Lambda '{lambda_arn}' to SNS topic '{topic_arn}' successfully"
+            f"\n(ARN) {response['SubscriptionArn']}"
+        )
+        return {"arn": response["SubscriptionArn"]}
+
+    except Exception as e:
+        logger.error(f"Error subscribing Lambda to SNS topic: {e}")
+        return None
+
+
+def add_lambda_sns_permission(function_name: str, topic_arn: str) -> bool:
+    lambda_client = boto3.client("lambda")
+    statement_id = f"{function_name}-sns-permission"
+    try:
+        lambda_client.add_permission(
+            FunctionName=function_name,
+            StatementId=statement_id,
+            Action="lambda:InvokeFunction",
+            Principal="sns.amazonaws.com",
+            SourceArn=topic_arn,
+        )
+        logger.info(
+            f"Added SNS invoke permission to Lambda '{function_name}' for topic '{topic_arn}'."
+        )
+        return True
+
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ResourceConflictException":
+            logger.info(
+                f"SNS invoke permission for Lambda '{function_name}' and topic '{topic_arn}' exists."
+            )
+            return True
+        else:
+            logger.error(f"Error adding SNS permission to Lambda: {e}")
+            return False
+
+
+def get_cloudwatch_alarm(alarm_name: str) -> dict | None:
+    cloudwatch_client = boto3.client("cloudwatch")
+    try:
+        response = cloudwatch_client.describe_alarms(AlarmNames=[alarm_name])
+        if response.get("MetricAlarms", []):
+            alarm = response["MetricAlarms"][0]
+            logger.info(
+                f"CloudWatch alarm '{alarm_name}' exists" f"\n(ARN) {alarm['AlarmArn']}"
+            )
+            return {"arn": alarm["AlarmArn"]}
+        logger.info(f"CloudWatch alarm '{alarm_name}' does not exist.")
+        return None
+
+    except Exception as e:
+        logger.error(f"Error getting CloudWatch alarm: {e}")
+        return None
+
+
+def create_cloudwatch_alarm(
+    alarm_name: str, topic_arn: str, queue_name: str
+) -> dict | None:
+    cloudwatch_client = boto3.client("cloudwatch")
+    try:
+        response = cloudwatch_client.put_metric_alarm(
+            AlarmName=alarm_name,
+            AlarmDescription=f"Alarm when the SQS queue '{queue_name}' has been idle for 15 minutes",
+            ActionsEnabled=True,
+            AlarmActions=[topic_arn],
+            MetricName="ApproximateNumberOfMessagesVisible",
+            Namespace="AWS/SQS",
+            Statistic="Maximum",
+            Dimensions=[{"Name": "QueueName", "Value": queue_name}],
+            Period=300,
+            EvaluationPeriods=3,
+            DatapointsToAlarm=3,
+            Threshold=0,
+            ComparisonOperator="LessThanOrEqualToThreshold",
+            TreatMissingData="notBreaching",
+        )
+        logger.info(f"CloudWatch alarm '{alarm_name}' created successfully")
+        return {"arn": response.get("AlarmArn", None)}
+
+    except Exception as e:
+        logger.error(f"Error creating CloudWatch alarm: {e}")
         return None
 
 
